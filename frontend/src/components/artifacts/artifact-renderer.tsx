@@ -12,27 +12,29 @@ interface Props {
 }
 
 export function ArtifactRenderer({ artifact, onSelectSourcePage }: Props) {
-  const { type, title, code, source_pages } = artifact;
+  // Use renderer field (canonical), fall back to type (backwards compat)
+  const renderer = artifact.renderer || artifact.type || "";
+  const { title, code, source_pages } = artifact;
 
   return (
     <div className="space-y-2">
-      {/* Render based on artifact type */}
-      {type === "mermaid" && <MermaidViewer code={code} title={title} />}
+      {/* Render based on renderer type */}
+      {renderer === "mermaid" && <MermaidViewer code={code} title={title} />}
 
-      {type === "svg" && <SVGViewer code={code} title={title} />}
+      {renderer === "svg" && <SVGViewer code={code} title={title} />}
 
-      {(type === "html" || type === "table") && (
+      {(renderer === "html" || renderer === "table") && (
         <HTMLViewer code={code} title={title} />
       )}
 
-      {/* Fallback: show code block for unknown types */}
-      {!["mermaid", "svg", "html", "table"].includes(type) && (
+      {/* Fallback: show code block for unknown renderers */}
+      {!["mermaid", "svg", "html", "table"].includes(renderer) && (
         <div className="rounded-xl border border-neutral-700 bg-neutral-900 p-3">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-white">{title}</div>
               <div className="mt-1 text-xs uppercase tracking-wide text-neutral-500">
-                {type}
+                {renderer}
               </div>
             </div>
             <FileText className="h-4 w-4 shrink-0 text-orange-400" />

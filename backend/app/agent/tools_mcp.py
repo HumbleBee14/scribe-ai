@@ -273,7 +273,7 @@ async def mcp_diagnose_weld(args: dict[str, Any]) -> dict[str, Any]:
             },
             "code": {
                 "type": "string",
-                "description": "The renderable content (Mermaid, JSX, SVG, HTML)",
+                "description": "The renderable content (Mermaid, SVG markup, HTML)",
             },
             "source_pages": {
                 "type": "array",

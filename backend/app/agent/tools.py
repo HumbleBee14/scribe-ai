@@ -230,7 +230,7 @@ TOOL_DEFINITIONS: list[dict] = [
                     "type": "string",
                     "description": (
                         "The renderable content "
-                        "(Mermaid code, React JSX, SVG, HTML, etc)"
+                        "(Mermaid code, SVG markup, HTML, etc)"
                     ),
                 },
                 "source_pages": {

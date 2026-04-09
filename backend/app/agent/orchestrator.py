@@ -324,11 +324,13 @@ class AgentOrchestrator:
                 })
 
         elif tool_name == "render_artifact":
+            renderer = tool_input.get("type", "")
             results.append({
                 "event": "artifact",
                 "data": {
                     "id": f"art_{hash(tool_input.get('title', '')) % 100000:05d}",
-                    "type": tool_input.get("type", ""),
+                    "renderer": renderer,
+                    "type": renderer,  # kept for backwards compat
                     "title": tool_input.get("title", ""),
                     "code": tool_input.get("code", ""),
                     "source_pages": tool_input.get("source_pages", []),

@@ -19,10 +19,12 @@ export interface ArtifactEvent {
   event: "artifact";
   data: {
     id: string;
-    type: string;
+    renderer: string;  // mermaid, svg, html, table
     title: string;
     code: string;
     source_pages: Array<{ page: number; description: string }>;
+    /** @deprecated Use renderer instead. Kept for backwards compatibility. */
+    type?: string;
   };
 }
 

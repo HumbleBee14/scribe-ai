@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { buildBackendUrl } from "@/lib/api";
 import { ArtifactRenderer } from "@/components/artifacts/artifact-renderer";
-import type { ChatMessage, SelectedSourcePage, SourcePageRef } from "@/types/events";
+import type { ChatMessage, SelectedSourcePage } from "@/types/events";
 
 interface Props {
   message: ChatMessage;
@@ -27,14 +27,6 @@ export function MessageBubble({
   onSelectSourcePage,
 }: Props) {
   const isUser = message.role === "user";
-
-  const handleSourceClick = (source: SourcePageRef, title?: string) => {
-    onSelectSourcePage?.({
-      page: source.page,
-      title,
-      description: source.description,
-    });
-  };
 
   return (
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>

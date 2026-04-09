@@ -47,12 +47,14 @@ def test_citation_minimal() -> None:
 
 def test_artifact_spec_typed() -> None:
     artifact = ArtifactSpec(
-        type="diagram",
+        id="art_12345",
         renderer="svg",
-        spec={"diagramKind": "polarity_setup", "process": "tig"},
+        title="TIG Polarity Setup",
+        code="<svg>...</svg>",
         source_pages=[SourceRef(page=24, description="TIG polarity setup")],
     )
-    assert artifact.type == "diagram"
+    assert artifact.renderer == "svg"
+    assert artifact.title == "TIG Polarity Setup"
     assert artifact.source_pages[0].page == 24
 
 
@@ -72,14 +74,15 @@ def test_evidence_payload_with_typed_artifact() -> None:
         answer="Here is the polarity diagram.",
         citations=[Citation(document="owner-manual", page=24, type="figure")],
         artifact=ArtifactSpec(
-            type="diagram",
+            id="art_00001",
             renderer="svg",
-            spec={"diagramKind": "polarity_setup", "process": "tig"},
+            title="TIG Polarity Setup",
+            code="<svg>...</svg>",
             source_pages=[SourceRef(page=24, description="TIG polarity setup")],
         ),
     )
     assert payload.artifact is not None
-    assert payload.artifact.type == "diagram"
+    assert payload.artifact.renderer == "svg"
     assert payload.artifact.source_pages[0].page == 24
 
 

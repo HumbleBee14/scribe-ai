@@ -1,4 +1,4 @@
-"""Evidence model — typed citation and payload objects for grounded answers."""
+"""Evidence model: typed citation and payload objects for grounded answers."""
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
@@ -25,11 +25,22 @@ class Citation(BaseModel):
 
 
 class ArtifactSpec(BaseModel):
-    """Specification for a generated artifact."""
+    """Specification for a generated artifact.
 
-    type: str  # diagram, calculator, configurator, flowchart, comparison-table, step-guide
-    renderer: str  # svg, react, mermaid, html
-    spec: dict = Field(default_factory=dict)
+    This model defines the contract between the backend (tool results)
+    and the frontend (artifact rendering). Fields:
+
+    - id: unique identifier for the artifact
+    - renderer: which frontend viewer to use (mermaid, svg, html, table)
+    - title: display title
+    - code: the renderable content string
+    - source_pages: manual pages this artifact is grounded in
+    """
+
+    id: str = ""
+    renderer: str  # mermaid, svg, html, table
+    title: str = ""
+    code: str = ""
     source_pages: list[SourceRef] = Field(default_factory=list)
 
 
