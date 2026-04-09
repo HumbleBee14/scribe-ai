@@ -1,4 +1,6 @@
-"""Tests for the Agent SDK orchestrator (event mapping, tool resolution, session)."""
+"""Tests for the orchestrator (fallback, event mapping, tool resolution, session)."""
+import pytest
+
 from app.agent.orchestrator import (
     AgentOrchestrator,
     _get_tool_label,
@@ -123,3 +125,26 @@ def test_emit_tool_specific_events_artifact() -> None:
     assert len(artifact_events) == 1
     assert artifact_events[0]["data"]["title"] == "TIG Polarity"
     assert artifact_events[0]["data"]["source_pages"][0]["page"] == 24
+
+
+@pytest.mark.asyncio
+async def test_run_falls_back_to_anthropic_when_sdk_startup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orch = AgentOrchestrator()
+    session = Session(id="test")
+
+    async def fake_sdk(user_message: str, session: Session, images=None):
+        raise RuntimeError("sdk unavailable")
+        yield  # pragma: no cover
+
+    async def fake_anthropic(user_message: str, session: Session, images=None):
+        yield {"event": "done", "data": {"status": "completed", "turns": 1}}
+
+    monkeypatch.setattr(orch, "_should_use_agent_sdk", lambda: True)
+    monkeypatch.setattr(orch, "_run_with_agent_sdk", fake_sdk)
+    monkeypatch.setattr(orch, "_run_with_anthropic_loop", fake_anthropic)
+
+    events = [event async for event in orch.run("hello", session)]
+
+    assert events == [{"event": "done", "data": {"status": "completed", "turns": 1}}]

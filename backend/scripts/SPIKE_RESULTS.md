@@ -1,8 +1,8 @@
 # Claude Agent SDK Spike Results
 
-## Status: Migration complete
+## Status: Optional path only
 
-The `claude-agent-sdk` package is now the orchestration foundation. The spike is done. This file documents what was learned.
+The `claude-agent-sdk` package was evaluated successfully, but it is not the default local runtime. This file documents what was learned and why the app now defaults to the raw Anthropic tool loop.
 
 ## Key Findings
 
@@ -23,20 +23,19 @@ With `include_partial_messages=True`, the SDK yields `StreamEvent` objects conta
 - Capture `session_id` from `ResultMessage`, pass `resume=session_id` on next turn
 - No need to manage message arrays ourselves
 
-### 4. Architecture after migration
-- `orchestrator.py`: uses `query()` + `resume` for multi-turn
-- `tools_mcp.py`: MCP tool wrappers around existing tool execution logic
-- `tools.py`: unchanged execution logic (structured store lookups, validation, caching)
-- `chat.py`: maps SDK events to frontend SSE events
-- Built-in `Read` tool enabled for broad manual questions alongside custom MCP tools
+### 4. Practical runtime decision
+- `claude-agent-sdk` depends on the local Claude CLI transport
+- That extra dependency is not safe to assume for evaluator machines
+- `orchestrator.py` therefore uses the raw Anthropic tool loop by default
+- The Agent SDK path remains available as an optional code path when the local Claude CLI exists
 
 ### 5. Known SSE contract gaps
 - `tool_start.data.input` is `{}` (tool args not available at `content_block_start` time, they stream via deltas)
 - `tool_end.data.ok` is always `true` (SDK handles errors internally)
 - These are acceptable for the current frontend but should be tightened if the UI needs them
 
-### 6. Full-context mode change
-The original "explicit full-context injection" (Phase 5) is replaced by enabling the SDK's built-in `Read` tool pointing at the manual PDF. This is simpler and lets the SDK handle PDF reading natively. Exact-data tools still handle all high-risk factual lookups.
+### 6. Full-context mode in the shipping app
+The shipping app uses explicit full-context PDF injection via the Anthropic Messages API. The SDK `Read` path remains useful for experimentation, but the zero-setup local runtime does not depend on it.
 
 ## Cost
 Approximately $0.06 to $0.12 per query (includes ToolSearch overhead for MCP tool discovery).

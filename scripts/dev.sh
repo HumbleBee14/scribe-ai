@@ -6,7 +6,7 @@ echo "Starting Prox Multimodal Agent (dev mode)..."
 # Backend
 echo "Starting backend..."
 cd backend
-uv run uvicorn app.main:app --reload --port 8000 &
+uv run python run_server.py --port 8000 &
 BACKEND_PID=$!
 cd ..
 
