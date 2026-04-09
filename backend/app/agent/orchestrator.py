@@ -10,7 +10,6 @@ import asyncio
 import json
 import logging
 import os
-import shutil
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -81,6 +80,7 @@ class AgentOrchestrator:
         self._manual_path = str(FILES_DIR / "owner-manual.pdf")
         self._tools = get_active_tools()
         self._full_context = FullContextProvider()
+        self._agent_sdk_disabled = False
 
     async def run(
         self,
@@ -90,14 +90,26 @@ class AgentOrchestrator:
     ) -> AsyncIterator[dict[str, Any]]:
         """Run the agent and yield SSE events for the frontend."""
         if self._should_use_agent_sdk():
+            logger.warning(
+                "[agent-runtime] request started via Claude Agent SDK (session=%s)",
+                session.id,
+            )
             emitted_any = False
             try:
                 async for event in self._run_with_agent_sdk(user_message, session, images):
                     emitted_any = True
                     yield event
+                logger.warning(
+                    "[agent-runtime] request completed via Claude Agent SDK (session=%s)",
+                    session.id,
+                )
                 return
             except Exception:
-                logger.exception("Agent SDK runtime error; falling back to Anthropic client")
+                self._agent_sdk_disabled = True
+                logger.exception(
+                    "[agent-runtime] Claude Agent SDK failed; "
+                    "switching to Anthropic client fallback"
+                )
                 if emitted_any:
                     yield {
                         "event": "error",
@@ -110,18 +122,24 @@ class AgentOrchestrator:
                     }
                     return
 
+        logger.warning(
+            "[agent-runtime] request started via Anthropic client fallback (session=%s)",
+            session.id,
+        )
         async for event in self._run_with_anthropic_loop(user_message, session, images):
             yield event
+        logger.warning(
+            "[agent-runtime] request completed via Anthropic client fallback (session=%s)",
+            session.id,
+        )
 
     def _should_use_agent_sdk(self) -> bool:
-        """Use Agent SDK only when the Claude CLI is actually available."""
+        """Use Agent SDK unless explicitly disabled or already failed in-process."""
         if os.getenv("DISABLE_CLAUDE_AGENT_SDK", "").lower() in {"1", "true", "yes"}:
             return False
         if os.getenv("FORCE_CLAUDE_AGENT_SDK", "").lower() in {"1", "true", "yes"}:
             return True
-        if os.name == "nt":
-            return False
-        return shutil.which("claude") is not None
+        return not self._agent_sdk_disabled
 
     async def _run_with_agent_sdk(
         self,
