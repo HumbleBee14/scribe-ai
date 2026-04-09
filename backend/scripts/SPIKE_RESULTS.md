@@ -1,40 +1,42 @@
 # Claude Agent SDK Spike Results
 
-## Conclusion: Migration is feasible and should be done
+## Status: Migration complete
 
-The `claude-agent-sdk` (pip: `claude-agent-sdk`, import: `claude_agent_sdk`) works with our architecture. Custom tools via MCP work correctly. Streaming events map to our SSE contract.
+The `claude-agent-sdk` package is now the orchestration foundation. The spike is done. This file documents what was learned.
 
 ## Key Findings
 
 ### 1. Custom tools work via MCP
 - Use `@tool` decorator + `create_sdk_mcp_server()`
-- Tool names get prefixed: `lookup_duty_cycle` becomes `mcp__welding__lookup_duty_cycle`
+- Tool names get prefixed: `lookup_duty_cycle` becomes `mcp__welding-knowledge__lookup_duty_cycle`
 - Return format MUST be MCP CallToolResult: `{"content": [{"type": "text", "text": json.dumps(data)}]}`
 
 ### 2. Streaming events available
 With `include_partial_messages=True`, the SDK yields `StreamEvent` objects containing:
 - `content_block_start` with `tool_use` type (maps to our `tool_start`)
 - `content_block_delta` with `text_delta` (maps to our `text_delta`)
-- `content_block_start` with `thinking` type (maps to our `thinking`)
 - `message_delta` with `stop_reason` (maps to our `done`)
 - Plus `AssistantMessage` and `ResultMessage` for complete turns
 
-### 3. Session management built-in
-- `session_id` option for conversation persistence
-- `resume` option for continuing sessions
-- `fork_session` for branching
+### 3. Multi-turn sessions
+- SDK persists sessions to disk automatically
+- Capture `session_id` from `ResultMessage`, pass `resume=session_id` on next turn
+- No need to manage message arrays ourselves
 
-### 4. What changes in our code
-- `provider.py`: replace `AnthropicProvider` with `AgentSDKProvider` using `query()`
-- `orchestrator.py`: simplify, the SDK handles the tool loop
-- `tools.py`: wrap each tool handler with `@tool` decorator, return MCP format
-- `chat.py`: map SDK events to our SSE events
+### 4. Architecture after migration
+- `orchestrator.py`: uses `query()` + `resume` for multi-turn
+- `tools_mcp.py`: MCP tool wrappers around existing tool execution logic
+- `tools.py`: unchanged execution logic (structured store lookups, validation, caching)
+- `chat.py`: maps SDK events to frontend SSE events
+- Built-in `Read` tool enabled for broad manual questions alongside custom MCP tools
 
-### 5. What stays the same
-- Frontend SSE contract (no changes needed)
-- Evidence model, structured store, validation
-- Tool logic (lookup functions stay the same, just wrapped differently)
-- Session sidebar, message rendering, artifacts
+### 5. Known SSE contract gaps
+- `tool_start.data.input` is `{}` (tool args not available at `content_block_start` time, they stream via deltas)
+- `tool_end.data.ok` is always `true` (SDK handles errors internally)
+- These are acceptable for the current frontend but should be tightened if the UI needs them
+
+### 6. Full-context mode change
+The original "explicit full-context injection" (Phase 5) is replaced by enabling the SDK's built-in `Read` tool pointing at the manual PDF. This is simpler and lets the SDK handle PDF reading natively. Exact-data tools still handle all high-risk factual lookups.
 
 ## Cost
-Spike test: $0.05 per query (includes ToolSearch overhead for MCP tool discovery).
+Approximately $0.06 to $0.12 per query (includes ToolSearch overhead for MCP tool discovery).
