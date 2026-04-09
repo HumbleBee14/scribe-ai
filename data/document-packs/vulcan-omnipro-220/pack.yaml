@@ -21,3 +21,7 @@ processes:
 voltages:
   - 120v
   - 240v
+knowledge_artifacts:
+  structured_data_method: manual_verified_transcription
+  structured_data_note: For the Vulcan manual, structured JSON was transcribed and verified manually from the source PDF to maximize exactness for the challenge.
+  page_images_script: backend/scripts/render_pages.py

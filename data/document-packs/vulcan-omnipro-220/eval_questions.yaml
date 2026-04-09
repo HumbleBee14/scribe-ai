@@ -10,7 +10,7 @@
 
 - id: flux-porosity-troubleshoot
   question: "I'm getting porosity in my flux-cored welds. What should I check?"
-  expected_answer: "Check polarity (must be DCEN), gas flow, workpiece cleanliness, CTWD, wire cleanliness"
+  expected_answer: "Check polarity (must be DCEN), workpiece cleanliness, CTWD, and wire cleanliness"
   expected_mode: troubleshooting
   expected_tool: lookup_troubleshooting
 
@@ -34,7 +34,7 @@
 - id: settings-16ga-mild-steel-mig
   question: "What settings should I use for MIG welding 16 gauge mild steel?"
   expected_mode: settings_lookup
-  expected_tool: get_settings_recommendation
+  expected_tool: lookup_settings
 
 - id: wiring-schematic
   question: "Show me the wiring schematic"

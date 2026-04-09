@@ -33,6 +33,31 @@
     "wire_speed": "50-500 IPM",
     "wire_spool_capacity": "Up to 12 lb spool"
   },
+  "flux_cored": {
+    "120v": {
+      "power_input": "120VAC / 60Hz",
+      "current_input_at_output": "20.8A at 100A",
+      "welding_current_range": "30-140A",
+      "rated_duty_cycle": "40% @ 100A",
+      "continuous_duty_cycle": "100% @ 75A",
+      "max_ocv": "86VDC"
+    },
+    "240v": {
+      "power_input": "240VAC / 60Hz",
+      "current_input_at_output": "25.5A at 200A",
+      "welding_current_range": "30-220A",
+      "rated_duty_cycle": "25% @ 200A",
+      "continuous_duty_cycle": "100% @ 115A",
+      "max_ocv": "86VDC"
+    },
+    "weldable_materials": ["Mild Steel", "Stainless Steel"],
+    "welding_wire_capacity": {
+      "flux_cored": ["0.030\"", "0.035\"", "0.045\""]
+    },
+    "wire_speed": "50-500 IPM",
+    "wire_spool_capacity": "Up to 12 lb spool",
+    "_note": "Flux-cored uses the same machine electrical specifications as the MIG wire-feed platform on page 7, but runs gasless self-shielded wire with DCEN polarity."
+  },
   "tig": {
     "120v": {
       "power_input": "120VAC / 60Hz",
