@@ -4,7 +4,6 @@ import json
 import re
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SPECS_PATH = REPO_ROOT / "backend" / "app" / "knowledge" / "data" / "specs.json"
 PACK_PATH = REPO_ROOT / "data" / "document-packs" / "vulcan-omnipro-220" / "pack.yaml"
