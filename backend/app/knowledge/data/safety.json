@@ -1,0 +1,78 @@
+{
+  "_source": "Pages 2-6 of owner-manual.pdf",
+  "categories": {
+    "general": {
+      "level": "warning",
+      "items": [
+        "Before use, read and understand manufacturer's instructions, Material Safety Data Sheets (MSDS's), employer's Safety practices, and ANSI Z49.1",
+        "Keep out of reach of children",
+        "Place the welder on a stable location before use",
+        "Do not overreach. Keep proper footing and balance at all times",
+        "Never leave the Welder unattended while energized. Turn power off if you have to leave"
+      ]
+    },
+    "electrical": {
+      "level": "danger",
+      "items": [
+        "ELECTRIC SHOCK can KILL",
+        "Turn off, disconnect power, and discharge electrode to ground before setting down torch/electrode holder and before service",
+        "Do not touch energized electrical parts. Wear dry, insulating gloves. Do not wear wet or damaged gloves",
+        "Connect to grounded, GFCI-protected power supply only",
+        "Do not use near water or damp objects",
+        "People with pacemakers should consult their physician(s) before use",
+        "Do not expose welders to rain or wet conditions",
+        "THIS WELDING MACHINE MUST BE CONNECTED TO POWER SOURCE IN ACCORDANCE WITH APPLICABLE ELECTRICAL CODES"
+      ]
+    },
+    "fumes_gas": {
+      "level": "warning",
+      "items": [
+        "Exposure to welding or cutting exhaust fumes can increase the risk of developing certain cancers, such as cancer of the larynx and lung cancer",
+        "Keep head out of fumes. Do not breathe exhaust fumes",
+        "Use enough ventilation, exhaust at arc, or both, to keep fumes and gases from breathing zone and general area",
+        "Work in a confined area only if it is well-ventilated, or while wearing an air-supplied respirator",
+        "Do not use near degreasing or painting operations"
+      ]
+    },
+    "arc_ray": {
+      "level": "warning",
+      "items": [
+        "ARC RAYS can injure eyes and burn skin",
+        "Wear ANSI-approved welding eye protection featuring at least a number 10 shade lens rating",
+        "Wear leather leggings, fire resistant shoes or boots during use",
+        "Keep clothing free of grease, oil, solvents, or any flammable substances",
+        "Wear an approved head covering to protect the head and neck",
+        "Wear an approved welding jacket or long sleeves to protect forearms from radiation burns"
+      ]
+    },
+    "fire": {
+      "level": "warning",
+      "items": [
+        "ARC AND SLAG can cause fire",
+        "Clear away or protect flammable objects within 35 feet (10 meters) radius",
+        "Keep ABC-type fire extinguisher near work area and know how to use it",
+        "Do not operate welders in atmospheres containing dangerously reactive or flammable liquids, gases, vapors, or dust",
+        "Do not weld or cut on materials having a combustible coating or combustible internal structure"
+      ]
+    },
+    "gas_cylinder": {
+      "level": "warning",
+      "items": [
+        "Cylinders can explode when damaged",
+        "Do not weld on a pressurized or closed cylinder",
+        "Do not allow an electrode holder, welding torch, or welding wire to touch the cylinder",
+        "Keep cylinders away from any electrical circuits, including welding circuits",
+        "Keep protective cap in place over the valve except when the cylinder is in use",
+        "Protect gas cylinders from heat, being struck, physical damage, slag, flames, sparks, and arcs"
+      ]
+    },
+    "asphyxiation": {
+      "level": "danger",
+      "items": [
+        "TO PREVENT DEATH FROM ASPHYXIATION: Do not open gas without proper ventilation. Fix gas leaks immediately",
+        "Shielding gas can displace air and cause rapid loss of consciousness and death",
+        "Shielding gas without carbon dioxide can be even more hazardous because asphyxiation can start without feeling shortness of breath"
+      ]
+    }
+  }
+}

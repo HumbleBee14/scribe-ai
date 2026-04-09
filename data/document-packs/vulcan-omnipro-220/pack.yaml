@@ -1,0 +1,23 @@
+id: vulcan-omnipro-220
+product_name: Vulcan OmniPro 220
+item_number: "57812"
+manufacturer: Harbor Freight Tools
+description: Multiprocess welding system (MIG, Flux-Cored, TIG, Stick) with dual voltage input (120V/240V) and LCD synergic controls
+sources:
+  - path: files/owner-manual.pdf
+    type: owner_manual
+    pages: 48
+  - path: files/quick-start-guide.pdf
+    type: quick_start
+    pages: 2
+  - path: files/selection-chart.pdf
+    type: selection_chart
+    pages: 1
+processes:
+  - mig
+  - flux_cored
+  - tig
+  - stick
+voltages:
+  - 120v
+  - 240v

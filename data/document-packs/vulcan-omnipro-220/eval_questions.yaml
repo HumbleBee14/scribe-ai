@@ -1,0 +1,89 @@
+# Evaluation questions for the Vulcan OmniPro 220 agent
+# These cover the challenge's core test scenarios + adversarial variants
+
+# --- Challenge README questions ---
+- id: duty-cycle-mig-200a-240v
+  question: "What's the duty cycle for MIG welding at 200A on 240V?"
+  expected_answer: "25% at 200A (2.5 min weld / 7.5 min rest per 10 min period), 100% continuous at 115A"
+  expected_mode: exact_lookup
+  expected_tool: lookup_duty_cycle
+
+- id: flux-porosity-troubleshoot
+  question: "I'm getting porosity in my flux-cored welds. What should I check?"
+  expected_answer: "Check polarity (must be DCEN), gas flow, workpiece cleanliness, CTWD, wire cleanliness"
+  expected_mode: troubleshooting
+  expected_tool: lookup_troubleshooting
+
+- id: tig-polarity-sockets
+  question: "What polarity setup do I need for TIG welding? Which socket does the ground clamp go in?"
+  expected_answer: "DCEN. TIG Torch in Negative (-) socket. Ground Clamp in Positive (+) socket. 100% Argon, 10-25 SCFH."
+  expected_mode: diagram
+  expected_tool: lookup_polarity
+
+# --- Additional deep technical questions ---
+- id: mig-vs-flux-comparison
+  question: "What's the difference between MIG and flux-cored welding on this machine?"
+  expected_mode: comparison_table
+  notes: "Should compare polarity, gas, wire type, materials, and use cases"
+
+- id: wire-spool-install
+  question: "How do I install the wire spool?"
+  expected_mode: step_guide
+  notes: "Should reference pages 10-11 and show diagrams"
+
+- id: settings-16ga-mild-steel-mig
+  question: "What settings should I use for MIG welding 16 gauge mild steel?"
+  expected_mode: settings_lookup
+  expected_tool: get_settings_recommendation
+
+- id: wiring-schematic
+  question: "Show me the wiring schematic"
+  expected_mode: image_retrieval
+  notes: "Should return page 45"
+
+- id: front-panel-controls
+  question: "What are the controls on the front panel?"
+  expected_mode: image_retrieval
+  notes: "Should return page 8 with labeled diagram"
+
+# --- Adversarial / edge cases ---
+- id: ambiguous-duty-cycle
+  question: "What's the duty cycle?"
+  expected_mode: clarification
+  notes: "Missing process and voltage. Agent should ask which process and voltage."
+
+- id: ambiguous-polarity
+  question: "Which socket?"
+  expected_mode: clarification
+  notes: "Too vague. Agent should ask what process and what cable."
+
+- id: cross-reference
+  question: "If I'm using flux-cored wire at 120V, what polarity do I need, what's the duty cycle, and what feed roller should I use?"
+  expected_mode: multi_tool
+  notes: "Requires cross-referencing polarity (DCEN), duty cycle (40%@100A), and feed roller (knurled groove)"
+
+- id: safety-tig-setup
+  question: "I want to set up TIG welding. Walk me through it."
+  expected_mode: step_guide
+  notes: "Should include safety warnings about asphyxiation risk with argon gas"
+
+- id: weld-diagnosis-request
+  question: "My wire weld has small holes in it. What's wrong?"
+  expected_mode: troubleshooting
+  notes: "Porosity. Should reference weld diagnosis on pages 35-37"
+
+- id: stick-electrode-types
+  question: "What electrode types can I use for stick welding?"
+  expected_answer: "60XX and 70XX electrodes"
+  expected_mode: exact_lookup
+  notes: "From page 32 LCD display showing electrode selection"
+
+- id: thermal-protection
+  question: "My welder shut down and there's a warning on the screen. What happened?"
+  expected_mode: troubleshooting
+  notes: "Thermal protection. Should explain duty cycle limits and cooling procedure"
+
+- id: aluminum-welding
+  question: "Can I weld aluminum with this machine?"
+  expected_answer: "Yes, with optional Spool Gun (sold separately) using MIG process with aluminum wire and appropriate shielding gas"
+  expected_mode: exact_lookup
