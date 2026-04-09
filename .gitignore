@@ -1,0 +1,20 @@
+.env
+.env.local
+
+# Local runtime state
+data/local.db
+data/local.db-*
+
+# Generated knowledge artifacts during local ingest
+knowledge/images/**
+knowledge/figures/**
+!knowledge/images/.gitkeep
+!knowledge/figures/.gitkeep
+
+# Python / Node local artifacts
+backend/.venv/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/.ruff_cache/
+frontend/node_modules/
+frontend/.next/

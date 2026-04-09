@@ -8,13 +8,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router as api_router
-from app.core.config import KNOWLEDGE_DIR, settings
+from app.core.config import DATA_DIR, KNOWLEDGE_DIR, settings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Startup / shutdown lifecycle."""
-    # Startup: ensure directories exist
+    # Startup: ensure local runtime directories exist.
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
     (KNOWLEDGE_DIR / "images").mkdir(exist_ok=True)
     (KNOWLEDGE_DIR / "figures").mkdir(exist_ok=True)
