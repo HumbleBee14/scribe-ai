@@ -219,7 +219,7 @@ TOOL_DEFINITIONS: list[dict] = [
             "properties": {
                 "type": {
                     "type": "string",
-                    "enum": ["mermaid", "react", "svg", "table", "html"],
+                    "enum": ["mermaid", "svg", "table", "html"],
                     "description": "Artifact rendering type",
                 },
                 "title": {

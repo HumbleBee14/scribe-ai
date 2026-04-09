@@ -15,8 +15,9 @@ export function HTMLViewer({ code, title }: Props) {
     const iframe = iframeRef.current;
     if (!iframe) return;
 
-    // Listen for height messages from the iframe content
+    // Listen for height messages from OUR iframe only (not other frames)
     const handleMessage = (event: MessageEvent) => {
+      if (event.source !== iframe.contentWindow) return;
       if (
         event.data &&
         typeof event.data === "object" &&

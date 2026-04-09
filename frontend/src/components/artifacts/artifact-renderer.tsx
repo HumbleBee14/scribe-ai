@@ -21,12 +21,12 @@ export function ArtifactRenderer({ artifact, onSelectSourcePage }: Props) {
 
       {type === "svg" && <SVGViewer code={code} title={title} />}
 
-      {(type === "html" || type === "table" || type === "react") && (
+      {(type === "html" || type === "table") && (
         <HTMLViewer code={code} title={title} />
       )}
 
       {/* Fallback: show code block for unknown types */}
-      {!["mermaid", "svg", "html", "table", "react"].includes(type) && (
+      {!["mermaid", "svg", "html", "table"].includes(type) && (
         <div className="rounded-xl border border-neutral-700 bg-neutral-900 p-3">
           <div className="flex items-start justify-between gap-3">
             <div>

@@ -266,7 +266,7 @@ async def mcp_diagnose_weld(args: dict[str, Any]) -> dict[str, Any]:
         "properties": {
             "type": {
                 "type": "string",
-                "enum": ["mermaid", "react", "svg", "table", "html"],
+                "enum": ["mermaid", "svg", "table", "html"],
             },
             "title": {
                 "type": "string",

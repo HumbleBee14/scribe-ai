@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle } from "lucide-react";
 
 interface Props {
@@ -8,13 +8,55 @@ interface Props {
   title?: string;
 }
 
+/**
+ * Renders SVG inside a sandboxed iframe for safety.
+ *
+ * Never uses dangerouslySetInnerHTML. The iframe sandbox prevents
+ * onload handlers, javascript: URLs, foreignObject scripts, and
+ * other SVG-based XSS vectors.
+ */
 export function SVGViewer({ code, title }: Props) {
-  // Sanitize: strip any <script> tags from SVG for safety
-  const sanitizedSvg = useMemo(() => {
-    return code.replace(/<script[\s\S]*?<\/script>/gi, "");
-  }, [code]);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(300);
 
-  const isValidSvg = sanitizedSvg.includes("<svg");
+  const isValidSvg = code.includes("<svg");
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (!iframeRef.current) return;
+      // Only accept messages from our iframe
+      if (event.source !== iframeRef.current.contentWindow) return;
+      if (
+        event.data &&
+        typeof event.data === "object" &&
+        event.data.type === "resize" &&
+        typeof event.data.height === "number"
+      ) {
+        setHeight(Math.min(event.data.height + 20, 800));
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  const wrappedSvg = `
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { margin: 0; padding: 16px; background: #0a0a0a; display: flex; align-items: center; justify-content: center; }
+  svg { max-width: 100%; height: auto; }
+</style>
+</head>
+<body>
+  ${code}
+  <script>
+    new ResizeObserver(() => {
+      window.parent.postMessage({ type: 'resize', height: document.body.scrollHeight }, '*');
+    }).observe(document.body);
+  </script>
+</body>
+</html>`;
 
   return (
     <div className="rounded-xl border border-neutral-700 bg-neutral-900 overflow-hidden">
@@ -25,9 +67,13 @@ export function SVGViewer({ code, title }: Props) {
       )}
 
       {isValidSvg ? (
-        <div
-          className="flex items-center justify-center p-4 [&_svg]:max-w-full [&_svg]:h-auto"
-          dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
+        <iframe
+          ref={iframeRef}
+          sandbox="allow-scripts"
+          srcDoc={wrappedSvg}
+          className="w-full border-0"
+          style={{ height: `${height}px` }}
+          title={title || "SVG diagram"}
         />
       ) : (
         <div className="p-4">
