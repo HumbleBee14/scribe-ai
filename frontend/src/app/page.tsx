@@ -1,62 +1,90 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { Trash2 } from "lucide-react";
+import { useChat } from "@/lib/use-chat";
+import { ChatInput } from "@/components/chat/chat-input";
+import { MessageBubble } from "@/components/chat/message-bubble";
+import { WelcomeScreen } from "@/components/chat/welcome-screen";
+import { SessionSidebar } from "@/components/evidence/session-sidebar";
+
 export default function Home() {
+  const { messages, isStreaming, session, sendMessage, clearMessages } =
+    useChat();
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = (
+    text: string,
+    images?: Array<{ mediaType: string; data: string }>
+  ) => {
+    sendMessage(text, images);
+  };
+
   return (
-    <main className="min-h-screen bg-[#0f1117] text-zinc-100">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-10">
-        <header className="mb-10 flex flex-col gap-3">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-orange-300">
-            Prox Challenge
-          </p>
-          <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-            Vulcan OmniPro 220 multimodal support assistant
-          </h1>
-          <p className="max-w-2xl text-base leading-7 text-zinc-300">
-            Phase 1 scaffold is live. The final product will answer exact technical
-            questions, surface grounded manual evidence, and generate diagrams,
-            calculators, and troubleshooting flows.
-          </p>
-        </header>
-
-        <section className="grid flex-1 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 shadow-2xl shadow-black/20">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Chat Workspace</h2>
-                <p className="text-sm text-zinc-400">
-                  Streaming chat, tool calls, and artifact rendering land here next.
-                </p>
-              </div>
-              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
-                Phase 1
-              </span>
-            </div>
-
-            <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-900/60 p-5">
-              <p className="mb-4 text-sm text-zinc-400">Quick actions</p>
-              <div className="flex flex-wrap gap-3">
-                {["Set up MIG", "Set up TIG", "Troubleshoot", "View Specs"].map((label) => (
-                  <button
-                    key={label}
-                    type="button"
-                    className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-zinc-200 transition hover:border-orange-400 hover:text-white"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+    <div className="flex h-screen">
+      {/* Main chat area */}
+      <div className="flex flex-1 flex-col">
+        {/* Header */}
+        <header className="flex items-center justify-between border-b border-neutral-800 bg-neutral-950 px-6 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-lg">&#x1F525;</span>
+            <div>
+              <h1 className="text-sm font-semibold text-white">
+                Vulcan OmniPro 220 Expert
+              </h1>
+              <p className="text-xs text-neutral-500">
+                Multimodal welding assistant
+              </p>
             </div>
           </div>
+          {messages.length > 0 && (
+            <button
+              onClick={clearMessages}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Clear
+            </button>
+          )}
+        </header>
 
-          <aside className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">Planned Surfaces</h2>
-            <ul className="space-y-3 text-sm text-zinc-300">
-              <li>Evidence cards with page previews and exactness labels</li>
-              <li>Source viewer with highlight overlays and region crops</li>
-              <li>Artifact pane for SVG diagrams, calculators, and flowcharts</li>
-              <li>Session context for process, voltage, material, and setup state</li>
-            </ul>
-          </aside>
-        </section>
+        {/* Messages or welcome */}
+        <div className="flex-1 overflow-y-auto">
+          {messages.length === 0 ? (
+            <WelcomeScreen onQuickAction={(msg) => handleSend(msg)} />
+          ) : (
+            <div className="space-y-6 px-6 py-4">
+              {messages.map((msg) => (
+                <MessageBubble key={msg.id} message={msg} />
+              ))}
+              <div ref={scrollRef} />
+            </div>
+          )}
+        </div>
+
+        {/* Input */}
+        <ChatInput onSend={handleSend} disabled={isStreaming} />
       </div>
-    </main>
+
+      {/* Right sidebar (session context + future artifact panel) */}
+      <aside className="hidden w-72 shrink-0 border-l border-neutral-800 bg-neutral-950 p-4 lg:block">
+        <SessionSidebar session={session} />
+
+        {/* Placeholder for artifact panel */}
+        <div className="mt-6">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+            Artifacts
+          </h3>
+          <p className="mt-2 text-xs text-neutral-600">
+            Diagrams and interactive tools will appear here.
+          </p>
+        </div>
+      </aside>
+    </div>
   );
 }
