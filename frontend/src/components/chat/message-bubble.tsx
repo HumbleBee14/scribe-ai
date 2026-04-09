@@ -3,7 +3,6 @@
 import ReactMarkdown from "react-markdown";
 import {
   AlertTriangle,
-  FileText,
   Bot,
   ExternalLink,
   Loader2,
@@ -13,6 +12,7 @@ import {
   User,
 } from "lucide-react";
 import { buildBackendUrl } from "@/lib/api";
+import { ArtifactRenderer } from "@/components/artifacts/artifact-renderer";
 import type { ChatMessage, SelectedSourcePage, SourcePageRef } from "@/types/events";
 
 interface Props {
@@ -139,45 +139,13 @@ export function MessageBubble({
           </div>
         ))}
 
-        {/* Artifacts */}
+        {/* Artifacts: rendered via type-specific viewers */}
         {message.artifacts?.map((artifact, i) => (
-          <div
+          <ArtifactRenderer
             key={`${artifact.id}-${i}`}
-            className="rounded-xl border border-neutral-700 bg-neutral-900 p-3"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-white">{artifact.title}</div>
-                <div className="mt-1 text-xs uppercase tracking-wide text-neutral-500">
-                  {artifact.type}
-                </div>
-              </div>
-              <FileText className="h-4 w-4 shrink-0 text-orange-400" />
-            </div>
-
-            <pre className="mt-3 overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-950 p-3 text-xs text-neutral-300">
-              <code>{artifact.code}</code>
-            </pre>
-
-            {artifact.source_pages.length > 0 && (
-              <div className="mt-3">
-                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
-                  Source Pages
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {artifact.source_pages.map((source, sourceIndex) => (
-                    <button
-                      key={`${artifact.id}-source-${sourceIndex}`}
-                      onClick={() => handleSourceClick(source, artifact.title)}
-                      className="rounded-full border border-neutral-700 bg-neutral-800 px-3 py-1 text-xs text-neutral-200 hover:border-orange-500 hover:text-orange-200"
-                    >
-                      p.{source.page} {source.description ? `· ${source.description}` : ""}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+            artifact={artifact}
+            onSelectSourcePage={onSelectSourcePage}
+          />
         ))}
 
         {/* Clarification card */}
