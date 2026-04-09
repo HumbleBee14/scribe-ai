@@ -26,6 +26,11 @@ export interface ArtifactEvent {
   };
 }
 
+export interface SourcePageRef {
+  page: number;
+  description: string;
+}
+
 export interface ImageEvent {
   event: "image";
   data: { page: number; url: string };
@@ -102,5 +107,12 @@ export interface SessionState {
   currentMaterial: string | null;
   currentThickness: string | null;
   setupStepsCompleted: string[];
+  safetyWarningsShown: string[];
   contextSummary: string;
+}
+
+export interface SelectedSourcePage {
+  page: number;
+  title?: string;
+  description?: string;
 }

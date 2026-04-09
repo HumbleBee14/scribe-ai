@@ -1,17 +1,22 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useChat } from "@/lib/use-chat";
 import { ChatInput } from "@/components/chat/chat-input";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { WelcomeScreen } from "@/components/chat/welcome-screen";
 import { SessionSidebar } from "@/components/evidence/session-sidebar";
+import { SourceViewer } from "@/components/evidence/source-viewer";
+import type { SelectedSourcePage } from "@/types/events";
 
 export default function Home() {
   const { messages, isStreaming, session, sendMessage, clearMessages } =
     useChat();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [selectedSource, setSelectedSource] = useState<SelectedSourcePage | null>(
+    null
+  );
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -24,6 +29,11 @@ export default function Home() {
   ) => {
     sendMessage(text, images);
   };
+
+  const artifacts = useMemo(
+    () => messages.flatMap((message) => message.artifacts ?? []),
+    [messages]
+  );
 
   return (
     <div className="flex h-screen">
@@ -44,7 +54,10 @@ export default function Home() {
           </div>
           {messages.length > 0 && (
             <button
-              onClick={clearMessages}
+              onClick={() => {
+                clearMessages();
+                setSelectedSource(null);
+              }}
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -60,7 +73,12 @@ export default function Home() {
           ) : (
             <div className="space-y-6 px-6 py-4">
               {messages.map((msg) => (
-                <MessageBubble key={msg.id} message={msg} />
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  onQuickReply={handleSend}
+                  onSelectSourcePage={setSelectedSource}
+                />
               ))}
               <div ref={scrollRef} />
             </div>
@@ -74,16 +92,7 @@ export default function Home() {
       {/* Right sidebar (session context + future artifact panel) */}
       <aside className="hidden w-72 shrink-0 border-l border-neutral-800 bg-neutral-950 p-4 lg:block">
         <SessionSidebar session={session} />
-
-        {/* Placeholder for artifact panel */}
-        <div className="mt-6">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
-            Artifacts
-          </h3>
-          <p className="mt-2 text-xs text-neutral-600">
-            Diagrams and interactive tools will appear here.
-          </p>
-        </div>
+        <SourceViewer selectedSource={selectedSource} artifacts={artifacts} />
       </aside>
     </div>
   );

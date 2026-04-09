@@ -5,9 +5,12 @@ import { streamChat } from "./api";
 import type {
   ArtifactEvent,
   ChatMessage,
+  DoneEvent,
+  ErrorEvent,
   ImageEvent,
   SafetyWarningEvent,
   SessionState,
+  SessionUpdateEvent,
 } from "@/types/events";
 
 let messageCounter = 0;
@@ -42,8 +45,9 @@ export function useChat() {
       };
 
       // Prepare assistant message placeholder
+      const assistantId = nextId();
       const assistantMsg: ChatMessage = {
-        id: nextId(),
+        id: assistantId,
         role: "assistant",
         content: "",
         toolCalls: [],
@@ -67,102 +71,126 @@ export function useChat() {
         };
 
         for await (const { event, data } of streamChat(payload)) {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = { ...updated[updated.length - 1] };
+          if (event === "session_update") {
+            const sessionData = data as SessionUpdateEvent["data"];
+            setSession({
+              id: sessionData.id,
+              currentProcess: sessionData.current_process,
+              currentVoltage: sessionData.current_voltage,
+              currentMaterial: sessionData.current_material,
+              currentThickness: sessionData.current_thickness,
+              setupStepsCompleted: sessionData.setup_steps_completed ?? [],
+              safetyWarningsShown: sessionData.safety_warnings_shown ?? [],
+              contextSummary: sessionData.context_summary ?? "",
+            });
+            continue;
+          }
 
-            switch (event) {
-              case "text_delta":
-                last.content += (data as { content: string }).content;
-                break;
+          setMessages((prev) =>
+            prev.map((message) => {
+              if (message.id !== assistantId) return message;
 
-              case "tool_start":
-                last.toolCalls = [
-                  ...(last.toolCalls ?? []),
-                  {
-                    tool: data.tool as string,
-                    label: data.label as string,
-                  },
-                ];
-                break;
+              const nextMessage: ChatMessage = { ...message };
 
-              case "tool_end": {
-                const tc = last.toolCalls ?? [];
-                const idx = tc.findIndex(
-                  (t) => t.tool === (data.tool as string) && t.ok === undefined
-                );
-                if (idx >= 0) {
-                  const copy = [...tc];
-                  copy[idx] = { ...copy[idx], ok: data.ok as boolean };
-                  last.toolCalls = copy;
+              switch (event) {
+                case "text_delta":
+                  nextMessage.content += (data as { content: string }).content;
+                  break;
+
+                case "tool_start":
+                  nextMessage.toolCalls = [
+                    ...(nextMessage.toolCalls ?? []),
+                    {
+                      tool: data.tool as string,
+                      label: data.label as string,
+                    },
+                  ];
+                  break;
+
+                case "tool_end": {
+                  const toolCalls = nextMessage.toolCalls ?? [];
+                  const idx = toolCalls.findIndex(
+                    (t) => t.tool === (data.tool as string) && t.ok === undefined
+                  );
+                  if (idx >= 0) {
+                    const copy = [...toolCalls];
+                    copy[idx] = { ...copy[idx], ok: data.ok as boolean };
+                    nextMessage.toolCalls = copy;
+                  }
+                  break;
                 }
-                break;
+
+                case "artifact":
+                  nextMessage.artifacts = [
+                    ...(nextMessage.artifacts ?? []),
+                    data as ArtifactEvent["data"],
+                  ];
+                  break;
+
+                case "image":
+                  nextMessage.pageImages = [
+                    ...(nextMessage.pageImages ?? []),
+                    data as ImageEvent["data"],
+                  ];
+                  break;
+
+                case "safety_warning":
+                  nextMessage.safetyWarnings = [
+                    ...(nextMessage.safetyWarnings ?? []),
+                    data as SafetyWarningEvent["data"],
+                  ];
+                  break;
+
+                case "clarification":
+                  nextMessage.clarification = data as {
+                    question: string;
+                    options?: string[];
+                  };
+                  break;
+
+                case "done":
+                  nextMessage.isStreaming = false;
+                  break;
+
+                case "error":
+                  nextMessage.content += `\n\n**Error:** ${(data as ErrorEvent["data"]).message}`;
+                  nextMessage.isStreaming = false;
+                  break;
               }
 
-              case "artifact":
-                last.artifacts = [
-                  ...(last.artifacts ?? []),
-                  data as ArtifactEvent["data"],
-                ];
-                break;
+              return nextMessage;
+            })
+          );
 
-              case "image":
-                last.pageImages = [
-                  ...(last.pageImages ?? []),
-                  data as ImageEvent["data"],
-                ];
-                break;
-
-              case "safety_warning":
-                last.safetyWarnings = [
-                  ...(last.safetyWarnings ?? []),
-                  data as SafetyWarningEvent["data"],
-                ];
-                break;
-
-              case "clarification":
-                last.clarification = data as {
-                  question: string;
-                  options?: string[];
-                };
-                break;
-
-              case "session_update":
-                setSession({
-                  id: data.id as string,
-                  currentProcess: data.current_process as string | null,
-                  currentVoltage: data.current_voltage as string | null,
-                  currentMaterial: data.current_material as string | null,
-                  currentThickness: data.current_thickness as string | null,
-                  setupStepsCompleted:
-                    (data.setup_steps_completed as string[]) ?? [],
-                  contextSummary: (data.context_summary as string) ?? "",
-                });
-                break;
-
-              case "done":
-                last.isStreaming = false;
-                break;
-
-              case "error":
-                last.content += `\n\n**Error:** ${data.message as string}`;
-                last.isStreaming = false;
-                break;
+          if (event === "done") {
+            const doneData = data as DoneEvent["data"];
+            if (doneData.status === "clarification_required") {
+              setIsStreaming(false);
             }
-
-            updated[updated.length - 1] = last;
-            return updated;
-          });
+          }
         }
+
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantId ? { ...message, isStreaming: false } : message
+          )
+        );
       } catch (err) {
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = { ...updated[updated.length - 1] };
-          last.content += `\n\n**Connection error:** ${err instanceof Error ? err.message : "Unknown error"}`;
-          last.isStreaming = false;
-          updated[updated.length - 1] = last;
-          return updated;
-        });
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantId
+              ? {
+                  ...message,
+                  content:
+                    message.content +
+                    `\n\n**Connection error:** ${
+                      err instanceof Error ? err.message : "Unknown error"
+                    }`,
+                  isStreaming: false,
+                }
+              : message
+          )
+        );
       } finally {
         setIsStreaming(false);
       }

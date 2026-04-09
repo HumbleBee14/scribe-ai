@@ -1,7 +1,16 @@
 /** SSE streaming client for the chat API. */
 
-const BACKEND_URL =
+export const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+
+export function buildBackendUrl(path: string): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${BACKEND_URL}${normalizedPath}`;
+}
+
+export function getManualPageImageUrl(page: number): string {
+  return buildBackendUrl(`/assets/images/page_${String(page).padStart(2, "0")}.png`);
+}
 
 export interface ChatRequestPayload {
   session_id: string | null;
@@ -16,7 +25,7 @@ export interface ChatRequestPayload {
 export async function* streamChat(
   payload: ChatRequestPayload
 ): AsyncGenerator<{ event: string; data: Record<string, unknown> }> {
-  const response = await fetch(`${BACKEND_URL}/api/chat/stream`, {
+  const response = await fetch(buildBackendUrl("/api/chat/stream"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -64,7 +73,7 @@ export async function getSession(
   sessionId: string
 ): Promise<Record<string, unknown> | null> {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/chat/session/${sessionId}`);
+    const res = await fetch(buildBackendUrl(`/api/chat/session/${sessionId}`));
     if (!res.ok) return null;
     return await res.json();
   } catch {

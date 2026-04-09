@@ -3,20 +3,38 @@
 import ReactMarkdown from "react-markdown";
 import {
   AlertTriangle,
+  FileText,
   Bot,
+  ExternalLink,
   Loader2,
+  ImageIcon,
   Search,
   ShieldAlert,
   User,
 } from "lucide-react";
-import type { ChatMessage } from "@/types/events";
+import { buildBackendUrl } from "@/lib/api";
+import type { ChatMessage, SelectedSourcePage, SourcePageRef } from "@/types/events";
 
 interface Props {
   message: ChatMessage;
+  onQuickReply?: (message: string) => void;
+  onSelectSourcePage?: (source: SelectedSourcePage) => void;
 }
 
-export function MessageBubble({ message }: Props) {
+export function MessageBubble({
+  message,
+  onQuickReply,
+  onSelectSourcePage,
+}: Props) {
   const isUser = message.role === "user";
+
+  const handleSourceClick = (source: SourcePageRef, title?: string) => {
+    onSelectSourcePage?.({
+      page: source.page,
+      title,
+      description: source.description,
+    });
+  };
 
   return (
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
@@ -35,6 +53,17 @@ export function MessageBubble({ message }: Props) {
 
       {/* Content */}
       <div className={`flex max-w-[80%] flex-col gap-2 ${isUser ? "items-end" : ""}`}>
+        {/* Uploaded user images */}
+        {message.images?.map((img, i) => (
+          <img
+            key={`${message.id}-upload-${i}`}
+            src={`data:${img.mediaType};base64,${img.data}`}
+            alt={`Uploaded reference ${i + 1}`}
+            className="max-h-48 rounded-xl border border-neutral-700 object-cover"
+            loading="lazy"
+          />
+        ))}
+
         {/* Safety warnings */}
         {message.safetyWarnings?.map((warning, i) => (
           <div
@@ -86,15 +115,68 @@ export function MessageBubble({ message }: Props) {
             key={i}
             className="rounded-lg border border-neutral-700 bg-neutral-900 p-2"
           >
-            <div className="text-xs text-neutral-400 mb-1">
-              Manual Page {img.page}
+            <div className="mb-1 flex items-center justify-between gap-2 text-xs text-neutral-400">
+              <span>Manual Page {img.page}</span>
+              <button
+                onClick={() =>
+                  onSelectSourcePage?.({
+                    page: img.page,
+                    title: `Manual Page ${img.page}`,
+                  })
+                }
+                className="inline-flex items-center gap-1 text-orange-300 hover:text-orange-200"
+              >
+                Open in sidebar
+                <ExternalLink className="h-3 w-3" />
+              </button>
             </div>
             <img
-              src={`http://localhost:8000${img.url}`}
+              src={buildBackendUrl(img.url)}
               alt={`Manual page ${img.page}`}
               className="max-h-80 rounded"
               loading="lazy"
             />
+          </div>
+        ))}
+
+        {/* Artifacts */}
+        {message.artifacts?.map((artifact, i) => (
+          <div
+            key={`${artifact.id}-${i}`}
+            className="rounded-xl border border-neutral-700 bg-neutral-900 p-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-white">{artifact.title}</div>
+                <div className="mt-1 text-xs uppercase tracking-wide text-neutral-500">
+                  {artifact.type}
+                </div>
+              </div>
+              <FileText className="h-4 w-4 shrink-0 text-orange-400" />
+            </div>
+
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-950 p-3 text-xs text-neutral-300">
+              <code>{artifact.code}</code>
+            </pre>
+
+            {artifact.source_pages.length > 0 && (
+              <div className="mt-3">
+                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
+                  Source Pages
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {artifact.source_pages.map((source, sourceIndex) => (
+                    <button
+                      key={`${artifact.id}-source-${sourceIndex}`}
+                      onClick={() => handleSourceClick(source, artifact.title)}
+                      className="rounded-full border border-neutral-700 bg-neutral-800 px-3 py-1 text-xs text-neutral-200 hover:border-orange-500 hover:text-orange-200"
+                    >
+                      p.{source.page} {source.description ? `· ${source.description}` : ""}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ))}
 
@@ -112,6 +194,7 @@ export function MessageBubble({ message }: Props) {
                     {message.clarification.options.map((opt, i) => (
                       <button
                         key={i}
+                        onClick={() => onQuickReply?.(opt)}
                         className="rounded-full bg-blue-900 px-3 py-1 text-xs text-blue-200 hover:bg-blue-800 transition-colors"
                       >
                         {opt}
@@ -131,6 +214,17 @@ export function MessageBubble({ message }: Props) {
             Thinking...
           </div>
         )}
+
+        {!isUser &&
+          !message.pageImages?.length &&
+          !message.artifacts?.length &&
+          !message.content &&
+          !message.isStreaming && (
+            <div className="flex items-center gap-2 text-xs text-neutral-500">
+              <ImageIcon className="h-3.5 w-3.5" />
+              No visual sources were returned for this answer.
+            </div>
+          )}
       </div>
     </div>
   );

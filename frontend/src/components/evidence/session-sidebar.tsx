@@ -8,7 +8,19 @@ interface Props {
 }
 
 export function SessionSidebar({ session }: Props) {
-  if (!session) return null;
+  if (!session) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+          Session Context
+        </h3>
+        <p className="text-xs text-neutral-600">
+          Start a conversation and the assistant will track your current process,
+          voltage, material, and setup state here.
+        </p>
+      </div>
+    );
+  }
 
   const items = [
     {
@@ -63,6 +75,38 @@ export function SessionSidebar({ session }: Props) {
           </div>
         </div>
       ))}
+
+      {session.setupStepsCompleted.length > 0 && (
+        <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+          <div className="text-[10px] uppercase text-neutral-500">Setup Steps</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {session.setupStepsCompleted.map((step) => (
+              <span
+                key={step}
+                className="rounded-full bg-neutral-800 px-2 py-1 text-[11px] text-neutral-200"
+              >
+                {step}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {session.safetyWarningsShown.length > 0 && (
+        <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+          <div className="text-[10px] uppercase text-neutral-500">Safety Topics</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {session.safetyWarningsShown.map((warning) => (
+              <span
+                key={warning}
+                className="rounded-full bg-red-950 px-2 py-1 text-[11px] text-red-200"
+              >
+                {warning.replace("_", " ")}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
