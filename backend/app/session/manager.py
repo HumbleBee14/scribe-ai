@@ -21,6 +21,7 @@ class Session:
     setup_steps_completed: list[str] = field(default_factory=list)
     safety_warnings_shown: set[str] = field(default_factory=set)
     message_history: list[dict[str, str]] = field(default_factory=list)
+    sdk_session_id: str | None = None  # Claude Agent SDK session ID for resume
 
     def context_summary(self) -> str:
         """Build a natural-language summary for system prompt injection."""
