@@ -16,6 +16,7 @@ dependencies = [
     "Pillow>=11.0.0",
     "numpy>=2.0.0",
     "claude-agent-sdk>=0.1.58",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -41,6 +42,9 @@ select = ["E", "F", "I", "W"]
 
 [tool.ruff.lint.per-file-ignores]
 "app/agent/prompts.py" = ["E501"]  # Long lines OK in prompt strings
+"scripts/spike_*.py" = ["E501", "F841"]  # Spike scripts: dev-only, relaxed lint
+"scripts/test_live_agent.py" = ["E501"]  # Live test assertions can be long
+"scripts/run_eval.py" = ["F841"]  # Eval tracking vars may be unused until needed
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
