@@ -75,7 +75,7 @@ async def main() -> None:
             print("PASS: Duty cycle answer contains 25%")
 
         if "polarity" in q.lower() and "tig" in q.lower():
-            assert "DCEN" in answer or "dcen" in answer.lower(), f"Expected DCEN in answer"
+            assert "DCEN" in answer or "dcen" in answer.lower(), "Expected DCEN in answer"
             print("PASS: TIG polarity answer contains DCEN")
 
 

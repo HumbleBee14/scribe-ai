@@ -2,8 +2,6 @@
 
 A production-grade multimodal reasoning agent for the Vulcan OmniPro 220 welding system, built on the **Claude Agent SDK**.
 
-<img src="product.webp" alt="Vulcan OmniPro 220" width="400" />
-
 ## Quickstart
 
 ```bash
@@ -41,7 +39,7 @@ Ask it anything about the Vulcan OmniPro 220 and it will:
 ## Architecture
 
 ```
-Frontend (Next.js 15)          Backend (Python FastAPI)
+Frontend (Next.js 16)          Backend (Python FastAPI)
 +------------------+           +------------------------+
 | Chat UI          |   SSE     | Claude Agent SDK       |
 | Artifact viewers | <-------> | (query + resume)       |
@@ -66,7 +64,7 @@ The agent uses `claude-agent-sdk` (the official Agent SDK, not the raw Anthropic
 ### Knowledge Engine: Three Retrieval Paths
 
 **Path 1: Exact-data tools** (highest confidence)
-- 7 structured lookup tools backed by verified JSON
+- 5 grounded lookup tools backed by verified JSON, plus helper tools for clarification, page images, artifacts, and weld diagnosis routing
 - Duty cycles, polarity, specs, troubleshooting, safety warnings
 - Deterministic validation compares proposed answers against ground truth
 - Zero hallucination risk on critical technical values
@@ -91,7 +89,7 @@ When text is not enough, the agent generates visual content:
 |------|----------|---------|
 | Polarity diagrams | SVG (sandboxed iframe) | Cable connection maps with red=positive, blue=negative |
 | Troubleshooting flows | Mermaid | Decision trees for diagnosing weld problems |
-| Spec comparisons | HTML (sandboxed iframe) | Interactive tables with sorting |
+| Spec comparisons | HTML (sandboxed iframe) | Interactive comparison tables |
 | Settings matrices | HTML | Process/material/thickness recommendations |
 
 All artifacts include source page references linking back to the manual.
@@ -177,7 +175,7 @@ cd frontend && npm run lint
 # Live API evaluation (requires ANTHROPIC_API_KEY)
 cd backend && uv run python scripts/test_live_agent.py
 
-# Full eval suite
+# Full eval suite (16 live cases; exits non-zero on failures or needs review)
 cd backend && uv run python scripts/run_eval.py
 ```
 

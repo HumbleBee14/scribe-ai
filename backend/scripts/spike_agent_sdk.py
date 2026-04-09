@@ -131,10 +131,10 @@ async def main() -> None:
                     print(f"  TOOL_RESULT: {content[:200]}")
 
         elif isinstance(event, UserMessage):
-            print(f"\n[USER] (tool results being sent back)")
+            print("\n[USER] (tool results being sent back)")
 
         elif isinstance(event, SystemMessage):
-            print(f"\n[SYSTEM]")
+            print("\n[SYSTEM]")
 
         elif isinstance(event, ResultMessage):
             print(f"\n[RESULT] turns={event.num_turns}, cost=${event.total_cost_usd}")

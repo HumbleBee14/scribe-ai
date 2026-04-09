@@ -83,7 +83,7 @@ async def main() -> None:
                 if cb_type == "tool_use":
                     print(f"\n[TOOL_START] {cb.get('name', '?')}")
                 elif cb_type == "thinking":
-                    print(f"\n[THINKING_START]")
+                    print("\n[THINKING_START]")
             elif evt_type == "content_block_stop":
                 pass
             elif evt_type == "message_start":

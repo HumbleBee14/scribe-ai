@@ -10,8 +10,6 @@ from claude_agent_sdk import (
     ClaudeAgentOptions,
     ResultMessage,
     StreamEvent,
-    SystemMessage,
-    UserMessage,
     create_sdk_mcp_server,
     query,
     tool,
