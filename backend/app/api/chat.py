@@ -10,29 +10,40 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.agent.orchestrator import AgentOrchestrator
+from app.agent.provider import AnthropicProvider
+from app.core.config import settings
 from app.session.manager import session_manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
-# Lazy singleton — created on first request to avoid import-time API calls
+# Lazy singleton — created on first request to avoid import-time side effects.
+# Uses constructor injection: provider is created here, passed to orchestrator.
 _orchestrator: AgentOrchestrator | None = None
 
 
 def _get_orchestrator() -> AgentOrchestrator:
-    global _orchestrator
+    global _orchestrator  # noqa: PLW0603
     if _orchestrator is None:
-        _orchestrator = AgentOrchestrator()
+        provider = AnthropicProvider(api_key=settings.anthropic_api_key)
+        _orchestrator = AgentOrchestrator(provider=provider)
     return _orchestrator
+
+
+class ImageInput(BaseModel):
+    """A single image uploaded by the user."""
+
+    media_type: str = "image/jpeg"
+    data: str  # base64-encoded
 
 
 class ChatRequest(BaseModel):
     session_id: str | None = None
     message: str
-    images: list[dict] | None = Field(
+    images: list[ImageInput] | None = Field(
         default=None,
-        description="Optional images as [{media_type, data (base64)}]",
+        description="Optional images as base64-encoded data",
     )
 
 
@@ -49,13 +60,18 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
     # Yield session info
     yield _sse_event("session_update", session.to_dict())
 
+    # Convert typed images to dicts for orchestrator
+    images_raw: list[dict[str, str]] | None = None
+    if request.images:
+        images_raw = [img.model_dump() for img in request.images]
+
     # Run agent and stream events
     assistant_chunks: list[str] = []
     clarification_question: str | None = None
     async for event in orchestrator.run(
         user_message=request.message,
         session=session,
-        images=request.images,
+        images=images_raw,
     ):
         if event["event"] == "text_delta":
             assistant_chunks.append(event["data"].get("content", ""))
@@ -67,7 +83,9 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
             if status == "completed" and assistant_message:
                 session_manager.append_turn(session, request.message, assistant_message)
             elif status == "clarification_required" and clarification_question:
-                session_manager.append_turn(session, request.message, clarification_question)
+                session_manager.append_turn(
+                    session, request.message, clarification_question
+                )
         yield _sse_event(event["event"], event["data"])
 
 

@@ -1,28 +1,26 @@
 """Tests for agent orchestrator runtime behavior."""
 from __future__ import annotations
 
-from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
 import app.agent.orchestrator as orchestrator_module
 from app.agent.orchestrator import AgentOrchestrator
+from app.agent.provider import ContentBlock, LLMProvider, ModelResponse
 from app.session.manager import Session
 
 
-class FakeMessagesAPI:
-    def __init__(self, responses: list[object]) -> None:
-        self._responses = responses
-        self.calls: list[dict] = []
+class FakeProvider(LLMProvider):
+    """Test double that returns pre-configured responses."""
 
-    async def create(self, **kwargs):  # type: ignore[no-untyped-def]
+    def __init__(self, responses: list[ModelResponse]) -> None:
+        self._responses = list(responses)
+        self.calls: list[dict[str, Any]] = []
+
+    async def create_message(self, **kwargs: Any) -> ModelResponse:
         self.calls.append(kwargs)
         return self._responses.pop(0)
-
-
-class FakeClient:
-    def __init__(self, responses: list[object]) -> None:
-        self.messages = FakeMessagesAPI(responses)
 
 
 class FakeFullContext:
@@ -36,36 +34,37 @@ class FakeFullContext:
         return {"type": "document", "source": {"type": "base64", "data": "abc"}}
 
 
-def _make_text_block(text: str) -> object:
-    return SimpleNamespace(type="text", text=text)
+def _text_response(text: str) -> ModelResponse:
+    return ModelResponse(
+        content=[ContentBlock(type="text", text=text)],
+        stop_reason="end_turn",
+        input_tokens=10,
+        output_tokens=5,
+    )
 
 
-def _make_tool_block(block_id: str, name: str, tool_input: dict) -> object:
-    return SimpleNamespace(type="tool_use", id=block_id, name=name, input=tool_input)
-
-
-def _make_response(content: list[object], stop_reason: str = "end_turn") -> object:
-    return SimpleNamespace(
-        content=content,
-        stop_reason=stop_reason,
-        usage=SimpleNamespace(input_tokens=10, output_tokens=5),
+def _tool_response(tool_id: str, name: str, tool_input: dict) -> ModelResponse:
+    return ModelResponse(
+        content=[ContentBlock(type="tool_use", id=tool_id, name=name, input=tool_input)],
+        stop_reason="tool_use",
+        input_tokens=10,
+        output_tokens=5,
     )
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_stops_after_clarification(monkeypatch: pytest.MonkeyPatch) -> None:
-    orchestrator = object.__new__(AgentOrchestrator)
-    orchestrator._client = FakeClient(
-        [
-            _make_response(
-                [_make_tool_block("tool-1", "clarify_question", {"question": "Which process?"})],
-                stop_reason="tool_use",
-            )
-        ]
+async def test_orchestrator_stops_after_clarification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = FakeProvider([
+        _tool_response("tool-1", "clarify_question", {"question": "Which process?"}),
+    ])
+    orchestrator = AgentOrchestrator(
+        provider=provider,
+        model="test-model",
+        full_context=FakeFullContext(),
     )
-    orchestrator._model = "test-model"
     orchestrator._tools = [{"name": "clarify_question"}]
-    orchestrator._full_context = FakeFullContext()
 
     monkeypatch.setattr(
         orchestrator_module,
@@ -76,28 +75,26 @@ async def test_orchestrator_stops_after_clarification(monkeypatch: pytest.Monkey
     session = Session(id="s1")
     events = [event async for event in orchestrator.run("What's the duty cycle?", session)]
 
-    assert [event["event"] for event in events] == ["tool_start", "tool_end", "clarification", "done"]
+    event_types = [event["event"] for event in events]
+    assert event_types == ["tool_start", "tool_end", "clarification", "done"]
     assert events[-1]["data"]["status"] == "clarification_required"
-    assert len(orchestrator._client.messages.calls) == 1
+    assert len(provider.calls) == 1
 
 
 @pytest.mark.asyncio
 async def test_orchestrator_tracks_safety_warning_and_completes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    orchestrator = object.__new__(AgentOrchestrator)
-    orchestrator._client = FakeClient(
-        [
-            _make_response(
-                [_make_tool_block("tool-1", "lookup_safety_warnings", {"category": "electrical"})],
-                stop_reason="tool_use",
-            ),
-            _make_response([_make_text_block("Use proper grounding.")]),
-        ]
+    provider = FakeProvider([
+        _tool_response("tool-1", "lookup_safety_warnings", {"category": "electrical"}),
+        _text_response("Use proper grounding."),
+    ])
+    orchestrator = AgentOrchestrator(
+        provider=provider,
+        model="test-model",
+        full_context=FakeFullContext(),
     )
-    orchestrator._model = "test-model"
     orchestrator._tools = [{"name": "lookup_safety_warnings"}]
-    orchestrator._full_context = FakeFullContext()
 
     monkeypatch.setattr(
         orchestrator_module,
@@ -122,16 +119,20 @@ async def test_orchestrator_tracks_safety_warning_and_completes(
     assert events[-1]["data"]["status"] == "completed"
 
 
-def test_build_messages_with_context_handles_string_history() -> None:
-    orchestrator = object.__new__(AgentOrchestrator)
-    orchestrator._full_context = FakeFullContext(available=True)
+def test_inject_full_context_handles_string_history() -> None:
+    provider = FakeProvider([])
+    orchestrator = AgentOrchestrator(
+        provider=provider,
+        model="test-model",
+        full_context=FakeFullContext(available=True),
+    )
 
     messages = [
         {"role": "user", "content": "Earlier question"},
         {"role": "assistant", "content": "Earlier answer"},
     ]
 
-    result = orchestrator._build_messages_with_context(messages)
+    result = orchestrator._inject_full_context(messages)
 
     assert result[0]["content"][0]["type"] == "document"
     assert result[0]["content"][1]["type"] == "text"

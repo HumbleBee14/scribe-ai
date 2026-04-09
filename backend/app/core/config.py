@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     # Required
     anthropic_api_key: str = ""
 
-    # Model
-    model_name: str = "claude-sonnet-4-6"
+    # Model (renamed from model_name to avoid Pydantic protected namespace warning)
+    llm_model: str = "claude-sonnet-4-6"
 
     # Database
     database_url: str = f"sqlite:///{PROJECT_ROOT / 'data' / 'local.db'}"
