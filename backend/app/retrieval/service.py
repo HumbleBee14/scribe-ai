@@ -109,6 +109,11 @@ class RetrievalService:
     def chunk_count(self) -> int:
         return len(self._chunks)
 
+    @staticmethod
+    def classify_query(query: str) -> QueryProfile:
+        """Classify a query for routing decisions."""
+        return QueryProfile.classify(query)
+
     def search(
         self,
         query: str,
@@ -141,8 +146,10 @@ class RetrievalService:
             chunk = self._chunks[idx]
             text = chunk["text"]
 
-            # Optional sentence-level compression
-            if compress:
+            # Optional sentence-level compression.
+            # Never compress safety sections to avoid dropping warnings.
+            is_safety_chunk = "safety" in chunk.get("section", "").lower()
+            if compress and not is_safety_chunk:
                 text = self._compress_to_relevant(text, query)
 
             results.append({

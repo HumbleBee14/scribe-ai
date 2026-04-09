@@ -67,3 +67,63 @@ def test_retrieval_empty_query_returns_empty() -> None:
     service = RetrievalService()
     results = service.search("")
     assert results == []
+
+
+# --- Exact-tool precedence ---
+
+
+def test_search_manual_redirects_duty_cycle_query() -> None:
+    """search_manual should redirect duty cycle queries to exact tools."""
+    from app.agent.tools import execute_tool
+
+    result = execute_tool("search_manual", {"query": "What is the duty cycle for MIG?"})
+    assert result.get("redirect") is True
+    assert "lookup_duty_cycle" in result.get("note", "")
+
+
+def test_search_manual_redirects_polarity_query() -> None:
+    from app.agent.tools import execute_tool
+
+    result = execute_tool("search_manual", {"query": "What polarity for TIG?"})
+    assert result.get("redirect") is True
+    assert "lookup_polarity" in result.get("note", "")
+
+
+def test_search_manual_does_not_redirect_general_query() -> None:
+    from app.agent.tools import execute_tool
+
+    result = execute_tool("search_manual", {"query": "How do I check wire feed tension?"})
+    assert result.get("redirect") is not True
+    assert len(result.get("results", [])) > 0
+
+
+# --- Section boosting ---
+
+
+def test_troubleshooting_query_boosts_troubleshooting_section() -> None:
+    service = RetrievalService()
+    results = service.search("porosity in my welds", max_results=3)
+    sections = [r["section"] for r in results]
+    # At least one result should be from troubleshooting or welding tips
+    assert any("Troubleshooting" in s or "Welding Tips" in s for s in sections)
+
+
+# --- Safety compression protection ---
+
+
+def test_safety_chunks_not_compressed() -> None:
+    """Safety section chunks should not be compressed to avoid dropping warnings."""
+    service = RetrievalService()
+    results = service.search("safety electrical shock", max_results=5, compress=True)
+    safety_results = [r for r in results if "Safety" in r["section"]]
+    for r in safety_results:
+        # Safety chunks should retain more content than compressed chunks
+        assert len(r["text"]) > 50
+
+
+def test_query_profile_routes_to_exact_tool() -> None:
+    profile = QueryProfile.classify("What's the duty cycle?")
+    assert profile.routes_to_exact_tool
+
+    profile2 = QueryProfile.classify("How do I adjust the feed tensioner?")
+    assert not profile2.routes_to_exact_tool

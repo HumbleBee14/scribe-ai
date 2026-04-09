@@ -442,11 +442,31 @@ def _execute_uncached(name: str, params: dict) -> dict:
 
     if name == "search_manual":
         retrieval = get_retrieval_service()
-        query = params.get("query", "")
+        query_text = params.get("query", "")
         max_results = params.get("max_results", 5)
-        results = retrieval.search(query, max_results=max_results)
+
+        # Exact-tool precedence: if the query clearly maps to a structured tool,
+        # redirect the agent instead of returning chunk prose.
+        profile = retrieval.classify_query(query_text)
+        if profile.routes_to_exact_tool:
+            suggestions = []
+            if profile.is_duty_cycle:
+                suggestions.append("lookup_duty_cycle")
+            if profile.is_polarity:
+                suggestions.append("lookup_polarity")
+            return {
+                "results": [],
+                "redirect": True,
+                "note": (
+                    f"This query is better answered by exact-data tools: "
+                    f"{', '.join(suggestions)}. "
+                    f"Please call those tools instead of search_manual for this type of question."
+                ),
+            }
+
+        results = retrieval.search(query_text, max_results=max_results)
         if not results:
-            return {"results": [], "note": f"No results found for '{query}'"}
+            return {"results": [], "note": f"No results found for '{query_text}'"}
         return {"results": results, "count": len(results)}
 
     return {"error": f"Unknown tool: {name}"}
