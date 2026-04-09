@@ -4,6 +4,13 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class SourceRef(BaseModel):
+    """A reference to a specific manual page that grounds a claim."""
+
+    page: int
+    description: str = ""
+
+
 class Citation(BaseModel):
     """A single piece of evidence backing an answer."""
 
@@ -14,17 +21,16 @@ class Citation(BaseModel):
     crop_url: str | None = None
     exactness: str | None = None  # native_pdf, vision_ocr
     confidence: float | None = None
-    source_refs: list[dict] | None = None
+    source_refs: list[SourceRef] | None = None
 
 
 class ArtifactSpec(BaseModel):
     """Specification for a generated artifact."""
 
-    # diagram, calculator, configurator, flowchart, comparison-table, step-guide, annotated-image
-    type: str
+    type: str  # diagram, calculator, configurator, flowchart, comparison-table, step-guide
     renderer: str  # svg, react, mermaid, html
     spec: dict = Field(default_factory=dict)
-    source_pages: list[dict] = Field(default_factory=list)
+    source_pages: list[SourceRef] = Field(default_factory=list)
 
 
 class EvidencePayload(BaseModel):
@@ -32,5 +38,5 @@ class EvidencePayload(BaseModel):
 
     answer: str
     citations: list[Citation] = Field(default_factory=list)
-    artifact: dict | None = None
+    artifact: ArtifactSpec | None = None
     follow_ups: list[str] = Field(default_factory=list)

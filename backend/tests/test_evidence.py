@@ -1,6 +1,15 @@
 """Tests for evidence model and structured data access."""
-from app.knowledge.evidence import Citation, EvidencePayload
-from app.knowledge.structured import StructuredStore
+import pytest
+
+from app.knowledge.evidence import (
+    ArtifactSpec,
+    Citation,
+    EvidencePayload,
+    SourceRef,
+)
+from app.knowledge.structured import StructuredStore, StructuredStoreError
+
+# --- Evidence model tests ---
 
 
 def test_citation_supports_page_region() -> None:
@@ -17,11 +26,34 @@ def test_citation_supports_page_region() -> None:
     assert citation.bbox == [72, 166, 452, 518]
 
 
+def test_citation_with_typed_source_refs() -> None:
+    citation = Citation(
+        document="owner-manual",
+        page=24,
+        type="figure",
+        source_refs=[SourceRef(page=24, description="TIG polarity diagram")],
+    )
+    assert citation.source_refs is not None
+    assert citation.source_refs[0].page == 24
+    assert citation.source_refs[0].description == "TIG polarity diagram"
+
+
 def test_citation_minimal() -> None:
     citation = Citation(document="owner-manual", page=7, type="text_block")
     assert citation.page == 7
     assert citation.bbox is None
     assert citation.exactness is None
+
+
+def test_artifact_spec_typed() -> None:
+    artifact = ArtifactSpec(
+        type="diagram",
+        renderer="svg",
+        spec={"diagramKind": "polarity_setup", "process": "tig"},
+        source_pages=[SourceRef(page=24, description="TIG polarity setup")],
+    )
+    assert artifact.type == "diagram"
+    assert artifact.source_pages[0].page == 24
 
 
 def test_evidence_payload_shape() -> None:
@@ -35,19 +67,23 @@ def test_evidence_payload_shape() -> None:
     assert payload.artifact is None
 
 
-def test_evidence_payload_with_artifact() -> None:
+def test_evidence_payload_with_typed_artifact() -> None:
     payload = EvidencePayload(
         answer="Here is the polarity diagram.",
         citations=[Citation(document="owner-manual", page=24, type="figure")],
-        artifact={
-            "type": "diagram",
-            "renderer": "svg",
-            "spec": {"diagramKind": "polarity_setup", "process": "tig"},
-            "source_pages": [{"page": 24, "description": "TIG polarity setup"}],
-        },
+        artifact=ArtifactSpec(
+            type="diagram",
+            renderer="svg",
+            spec={"diagramKind": "polarity_setup", "process": "tig"},
+            source_pages=[SourceRef(page=24, description="TIG polarity setup")],
+        ),
     )
     assert payload.artifact is not None
-    assert payload.artifact["type"] == "diagram"
+    assert payload.artifact.type == "diagram"
+    assert payload.artifact.source_pages[0].page == 24
+
+
+# --- Structured store tests ---
 
 
 def test_structured_store_loads_specs() -> None:
@@ -55,6 +91,15 @@ def test_structured_store_loads_specs() -> None:
     specs = store.get_specs("mig", "240v")
     assert specs is not None
     assert specs["welding_current_range"] == "30-220A"
+
+
+def test_structured_store_specs_include_process_metadata() -> None:
+    """Fix 4: get_specs merges process-level metadata into voltage-specific result."""
+    store = StructuredStore()
+    specs = store.get_specs("mig", "240v")
+    assert specs is not None
+    assert "weldable_materials" in specs
+    assert "Mild Steel" in specs["weldable_materials"]
 
 
 def test_structured_store_loads_duty_cycle() -> None:
@@ -103,3 +148,19 @@ def test_structured_store_returns_none_for_invalid() -> None:
     assert store.get_specs("plasma", "240v") is None
     assert store.get_duty_cycle("plasma", "240v") is None
     assert store.get_polarity("plasma") is None
+
+
+def test_structured_store_health_check() -> None:
+    store = StructuredStore()
+    health = store.health_check()
+    assert health["healthy"] is True
+    assert "specs.json" in health["loaded"]
+    assert len(health["missing_required"]) == 0
+
+
+def test_structured_store_fails_fast_on_missing_required(tmp_path: pytest.TempPathFactory) -> None:
+    """Fix 1: Missing required files must raise, not silently return empty dicts."""
+    empty_dir = tmp_path / "empty"  # type: ignore[operator]
+    empty_dir.mkdir()
+    with pytest.raises(StructuredStoreError, match="Required knowledge file missing"):
+        StructuredStore(data_dir=empty_dir)
