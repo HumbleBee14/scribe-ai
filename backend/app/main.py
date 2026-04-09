@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.api.chat import router as chat_router
 from app.api.routes import router as api_router
 from app.core.config import DATA_DIR, KNOWLEDGE_DIR, settings
 
@@ -54,3 +55,4 @@ if KNOWLEDGE_DIR.exists():
 
 # API routes
 app.include_router(api_router)
+app.include_router(chat_router)

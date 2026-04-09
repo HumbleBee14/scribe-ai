@@ -43,20 +43,16 @@ class FullContextProvider:
 
     def _load_pdf(self) -> None:
         """Load and cache the PDF as base64."""
-        with open(self._pdf_path, "rb") as f:
-            pdf_bytes = f.read()
-        self._cached_base64 = base64.standard_b64encode(pdf_bytes).decode("ascii")
-
-        # Get page count via PyMuPDF
         try:
-            import fitz
-
-            doc = fitz.open(str(self._pdf_path))
-            self._page_count = len(doc)
-            doc.close()
-        except ImportError:
-            logger.warning("PyMuPDF not available; page count unknown")
+            pdf_bytes = self._pdf_path.read_bytes()
+        except OSError:
+            logger.exception("Full-context mode: failed to read %s", self._pdf_path)
+            self._cached_base64 = None
             self._page_count = 0
+            return
+
+        self._cached_base64 = base64.standard_b64encode(pdf_bytes).decode("ascii")
+        self._page_count = self._detect_page_count()
 
         logger.info(
             "Full-context mode: loaded %s (%d pages, %d bytes base64)",
@@ -64,6 +60,21 @@ class FullContextProvider:
             self._page_count,
             len(self._cached_base64),
         )
+
+    def _detect_page_count(self) -> int:
+        """Best-effort page count detection via PyMuPDF."""
+        try:
+            import fitz
+
+            doc = fitz.open(str(self._pdf_path))
+            page_count = len(doc)
+            doc.close()
+            return page_count
+        except ImportError:
+            logger.warning("PyMuPDF not available; page count unknown")
+        except Exception:
+            logger.exception("Full-context mode: failed to parse %s", self._pdf_path)
+        return 0
 
     def is_available(self) -> bool:
         """Check if the manual PDF is loaded and ready."""
