@@ -1,25 +1,41 @@
 """Tests for agent tools — exact-data lookups and validation."""
-from app.agent.tools import TOOL_DEFINITIONS, execute_tool
+import app.agent.tools as tools_module
+from app.agent.tools import (
+    DEFERRED_TOOL_DEFINITIONS,
+    TOOL_DEFINITIONS,
+    execute_tool,
+    get_active_tools,
+)
 
 # --- Tool registry tests ---
 
-def test_all_tools_registered() -> None:
-    names = [t["name"] for t in TOOL_DEFINITIONS]
-    expected = [
+
+def test_active_tools_have_working_backends() -> None:
+    """Active tools should all have real execution handlers, not stubs."""
+    active = get_active_tools()
+    active_names = [t["name"] for t in active]
+    expected_active = [
         "lookup_specifications",
         "lookup_duty_cycle",
         "lookup_polarity",
         "lookup_troubleshooting",
-        "lookup_settings",
         "lookup_safety_warnings",
         "clarify_question",
-        "search_manual",
         "get_page_image",
         "diagnose_weld",
         "render_artifact",
     ]
-    for name in expected:
-        assert name in names, f"Missing tool: {name}"
+    for name in expected_active:
+        assert name in active_names, f"Missing active tool: {name}"
+    # search_manual should NOT be in active tools (deferred)
+    assert "search_manual" not in active_names
+
+
+def test_deferred_tools_exist() -> None:
+    """Deferred tools are defined but not exposed to the agent yet."""
+    deferred_names = [t["name"] for t in DEFERRED_TOOL_DEFINITIONS]
+    assert "search_manual" in deferred_names
+    assert "lookup_settings" in deferred_names
 
 
 def test_tool_definitions_have_enums() -> None:
@@ -76,6 +92,11 @@ def test_lookup_troubleshooting_porosity() -> None:
     assert "Porosity" in result[0]["problem"]
 
 
+def test_lookup_settings_is_not_active_until_grounded() -> None:
+    active_names = [tool["name"] for tool in get_active_tools()]
+    assert "lookup_settings" not in active_names
+
+
 def test_lookup_safety_electrical() -> None:
     result = execute_tool("lookup_safety_warnings", {"category": "electrical"})
     assert result["level"] == "danger"
@@ -108,3 +129,37 @@ def test_validation_accepts_correct_polarity() -> None:
         ground_truth={"polarity_type": "DCEN"},
     )
     assert result["valid"] is True
+
+
+def test_execute_tool_runs_validation_for_exact_duty_cycle(monkeypatch) -> None:
+    calls: list[tuple[str, dict, dict]] = []
+
+    def fake_validate(query_type: str, proposed: dict, ground_truth: dict) -> dict:
+        calls.append((query_type, proposed, ground_truth))
+        return {"valid": True, "reason": "ok", "mismatches": []}
+
+    monkeypatch.setattr(tools_module, "validate_exact_answer", fake_validate, raising=False)
+    tools_module._execute_cached.cache_clear()
+
+    result = execute_tool("lookup_duty_cycle", {"process": "mig", "voltage": "240v"})
+
+    assert result["rated"]["duty_cycle_percent"] == 25
+    assert calls
+    assert calls[0][0] == "duty_cycle"
+
+
+def test_execute_tool_runs_validation_for_exact_polarity(monkeypatch) -> None:
+    calls: list[tuple[str, dict, dict]] = []
+
+    def fake_validate(query_type: str, proposed: dict, ground_truth: dict) -> dict:
+        calls.append((query_type, proposed, ground_truth))
+        return {"valid": True, "reason": "ok", "mismatches": []}
+
+    monkeypatch.setattr(tools_module, "validate_exact_answer", fake_validate, raising=False)
+    tools_module._execute_cached.cache_clear()
+
+    result = execute_tool("lookup_polarity", {"process": "tig"})
+
+    assert result["polarity_type"] == "DCEN"
+    assert calls
+    assert calls[0][0] == "polarity"

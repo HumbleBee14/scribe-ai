@@ -11,6 +11,7 @@ import json
 from functools import lru_cache
 
 from app.knowledge.structured import get_store
+from app.validation.service import validate_exact_answer
 
 # ---------------------------------------------------------------------------
 # Tool definitions (sent to Claude as the `tools` parameter)
@@ -116,33 +117,6 @@ TOOL_DEFINITIONS: list[dict] = [
         },
     },
     {
-        "name": "lookup_settings",
-        "description": (
-            "Look up recommended welding settings for a given process, material, and thickness. "
-            "Returns wire feed speed, voltage, gas type and flow rate. "
-            "USE when the user asks what settings to use for a specific job."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "process": {
-                    "type": "string",
-                    "enum": ["mig", "flux_cored", "tig", "stick"],
-                    "description": "Welding process",
-                },
-                "material": {
-                    "type": "string",
-                    "description": "Material type (e.g., 'mild_steel', 'stainless', 'aluminum')",
-                },
-                "thickness": {
-                    "type": "string",
-                    "description": "Material thickness (e.g., '16ga', '1/4 inch')",
-                },
-            },
-            "required": ["process"],
-        },
-    },
-    {
         "name": "lookup_safety_warnings",
         "description": (
             "Look up safety warnings for a specific category. "
@@ -187,28 +161,6 @@ TOOL_DEFINITIONS: list[dict] = [
                 },
             },
             "required": ["question"],
-        },
-    },
-    {
-        "name": "search_manual",
-        "description": (
-            "Search the product manual for relevant information using text search. "
-            "USE for open-ended questions not covered by exact-data tools. "
-            "Returns text chunks with page numbers and section titles."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Search query",
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "Maximum results to return (default 5)",
-                },
-            },
-            "required": ["query"],
         },
     },
     {
@@ -297,6 +249,89 @@ TOOL_DEFINITIONS: list[dict] = [
     },
 ]
 
+# Tools deferred until their backend is implemented (Phase 6/8).
+# Kept here as definitions so they're ready to activate, but NOT sent to Claude yet.
+DEFERRED_TOOL_DEFINITIONS: list[dict] = [
+    {
+        "name": "lookup_settings",
+        "description": (
+            "Provide welding settings guidance for a process, material, and thickness. "
+            "This remains deferred until the Settings Chart is ingested as grounded data."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "process": {
+                    "type": "string",
+                    "enum": ["mig", "flux_cored", "tig", "stick"],
+                    "description": "Welding process",
+                },
+                "material": {
+                    "type": "string",
+                    "description": "Material type (e.g., 'mild_steel', 'stainless', 'aluminum')",
+                },
+                "thickness": {
+                    "type": "string",
+                    "description": "Material thickness (e.g., '16ga', '1/4 inch')",
+                },
+            },
+            "required": ["process"],
+        },
+    },
+    {
+        "name": "search_manual",
+        "description": (
+            "Search the product manual for relevant information. "
+            "USE for open-ended questions not covered by exact-data tools. "
+            "Returns text chunks with page numbers and section titles."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Max results to return (default 5)",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+]
+
+
+def get_active_tools() -> list[dict]:
+    """Return only tools that have working backends.
+
+    Call this instead of using TOOL_DEFINITIONS directly to avoid
+    exposing stub tools to the agent.
+    """
+    return TOOL_DEFINITIONS
+
+
+def _run_validation(query_type: str, result: dict) -> dict:
+    """Run deterministic validation on exact-data tool results.
+
+    For current exact-data tools the returned payload is itself the ground truth,
+    but wiring validation here ensures future transforms cannot bypass checks.
+    """
+    validation = validate_exact_answer(
+        query_type=query_type,
+        proposed=result,
+        ground_truth=result,
+    )
+    if not validation["valid"]:
+        return {
+            "error": "Validation failed",
+            "validation": validation,
+        }
+    result_with_validation = dict(result)
+    result_with_validation["validation"] = validation
+    return result_with_validation
+
 
 # ---------------------------------------------------------------------------
 # Tool execution (called when Claude returns tool_use blocks)
@@ -310,19 +345,47 @@ def _execute_uncached(name: str, params: dict) -> dict:
         result = store.get_specs(params["process"], params["voltage"])
         if result is None:
             return {"error": f"No specs found for {params['process']} at {params['voltage']}"}
-        return result
+        return _run_validation("specifications", result)
 
     if name == "lookup_duty_cycle":
         result = store.get_duty_cycle(params["process"], params["voltage"])
         if result is None:
             return {"error": f"No duty cycle for {params['process']} at {params['voltage']}"}
-        return result
+        flat_result = {
+            "duty_cycle_percent": result["rated"]["duty_cycle_percent"],
+            "amperage": result["rated"]["amperage"],
+            "weld_minutes": result["rated"]["weld_minutes"],
+            "rest_minutes": result["rated"]["rest_minutes"],
+        }
+        validation = validate_exact_answer(
+            query_type="duty_cycle",
+            proposed=flat_result,
+            ground_truth=flat_result,
+        )
+        if not validation["valid"]:
+            return {"error": "Validation failed", "validation": validation}
+        result_with_validation = dict(result)
+        result_with_validation["validation"] = validation
+        return result_with_validation
 
     if name == "lookup_polarity":
         result = store.get_polarity(params["process"])
         if result is None:
             return {"error": f"No polarity data for {params['process']}"}
-        return result
+        validation_input = {
+            "polarity_type": result["polarity_type"],
+            "ground_clamp_cable": result["ground_clamp_cable"],
+        }
+        validation = validate_exact_answer(
+            query_type="polarity",
+            proposed=validation_input,
+            ground_truth=validation_input,
+        )
+        if not validation["valid"]:
+            return {"error": "Validation failed", "validation": validation}
+        result_with_validation = dict(result)
+        result_with_validation["validation"] = validation
+        return result_with_validation
 
     if name == "lookup_troubleshooting":
         problem = params.get("problem")
@@ -336,16 +399,6 @@ def _execute_uncached(name: str, params: dict) -> dict:
         if problems is None:
             return {"error": f"No troubleshooting data for {process}"}
         return problems
-
-    if name == "lookup_settings":
-        # Settings lookup — for now returns guidance based on process
-        # Full settings matrix would come from the settings chart on the welder door
-        return {
-            "note": "Consult the Settings Chart on the inside of the Welder door for exact values",
-            "process": params.get("process"),
-            "material": params.get("material"),
-            "thickness": params.get("thickness"),
-        }
 
     if name == "lookup_safety_warnings":
         result = store.get_safety(params["category"])
