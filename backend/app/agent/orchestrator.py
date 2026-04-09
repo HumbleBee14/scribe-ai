@@ -1,4 +1,4 @@
-"""Agent orchestrator — Claude SDK agentic loop with tool use and streaming.
+"""Agent orchestrator — raw Anthropic tool loop with SSE event output.
 
 This is the core runtime: it sends messages to Claude, handles tool calls,
 and streams results back via SSE events.
@@ -22,6 +22,17 @@ from app.session.manager import Session
 logger = logging.getLogger(__name__)
 
 MAX_TOOL_TURNS = 10
+TOOL_PROGRESS_LABELS = {
+    "lookup_specifications": "Looking up specifications",
+    "lookup_duty_cycle": "Looking up duty cycle",
+    "lookup_polarity": "Checking polarity setup",
+    "lookup_troubleshooting": "Checking troubleshooting guidance",
+    "lookup_safety_warnings": "Reviewing safety warnings",
+    "clarify_question": "Preparing clarification",
+    "get_page_image": "Loading manual page",
+    "diagnose_weld": "Reviewing weld symptoms",
+    "render_artifact": "Generating visual aid",
+}
 
 
 class AgentOrchestrator:
@@ -64,8 +75,8 @@ class AgentOrchestrator:
 
         content.append({"type": "text", "text": user_message})
 
-        # Build messages array
-        messages: list[dict[str, Any]] = [{"role": "user", "content": content}]
+        # Build messages array from bounded session history plus this user turn.
+        messages: list[dict[str, Any]] = [*session.message_history, {"role": "user", "content": content}]
 
         # System prompt with session context
         system_prompt = build_system_prompt(session.context_summary())
@@ -98,7 +109,11 @@ class AgentOrchestrator:
                 elif block.type == "tool_use":
                     yield {
                         "event": "tool_start",
-                        "data": {"tool": block.name, "input": block.input},
+                        "data": {
+                            "tool": block.name,
+                            "input": block.input,
+                            "label": TOOL_PROGRESS_LABELS.get(block.name, block.name),
+                        },
                     }
                     tool_calls.append({
                         "id": block.id,
@@ -111,6 +126,7 @@ class AgentOrchestrator:
                 yield {
                     "event": "done",
                     "data": {
+                        "status": "completed",
                         "usage": {
                             "input_tokens": response.usage.input_tokens,
                             "output_tokens": response.usage.output_tokens,
@@ -136,6 +152,7 @@ class AgentOrchestrator:
 
             # Emit tool results and check for artifacts
             tool_result_content: list[dict] = []
+            clarification_requested = False
             for tc, result in zip(tool_calls, tool_results):
                 result_str = json.dumps(result) if isinstance(result, (dict, list)) else str(result)
                 tool_result_content.append({
@@ -143,6 +160,14 @@ class AgentOrchestrator:
                     "tool_use_id": tc["id"],
                     "content": result_str,
                 })
+                yield {
+                    "event": "tool_end",
+                    "data": {
+                        "tool": tc["name"],
+                        "label": TOOL_PROGRESS_LABELS.get(tc["name"], tc["name"]),
+                        "ok": "error" not in result if isinstance(result, dict) else True,
+                    },
+                }
 
                 # Emit special events for certain tool results
                 if tc["name"] == "render_artifact" and isinstance(result, dict):
@@ -156,6 +181,7 @@ class AgentOrchestrator:
                         },
                     }
                 elif tc["name"] == "clarify_question" and isinstance(result, dict):
+                    clarification_requested = True
                     yield {
                         "event": "clarification",
                         "data": {
@@ -164,6 +190,9 @@ class AgentOrchestrator:
                         },
                     }
                 elif tc["name"] == "lookup_safety_warnings" and isinstance(result, dict):
+                    category = tc["input"].get("category")
+                    if category:
+                        session.safety_warnings_shown.add(category)
                     yield {
                         "event": "safety_warning",
                         "data": {
@@ -171,6 +200,17 @@ class AgentOrchestrator:
                             "content": "; ".join(result.get("items", [])),
                         },
                     }
+                    yield {"event": "session_update", "data": session.to_dict()}
+
+            if clarification_requested:
+                yield {
+                    "event": "done",
+                    "data": {
+                        "status": "clarification_required",
+                        "turns": turn + 1,
+                    },
+                }
+                return
 
             messages.append({"role": "user", "content": tool_result_content})
 
@@ -192,9 +232,11 @@ class AgentOrchestrator:
         if result and result[0]["role"] == "user":
             first_msg = dict(result[0])
             original_content = first_msg["content"]
+            doc_block = self._full_context.build_document_block()
             if isinstance(original_content, list):
-                doc_block = self._full_context.build_document_block()
                 first_msg["content"] = [doc_block, *original_content]
+            else:
+                first_msg["content"] = [doc_block, {"type": "text", "text": str(original_content)}]
             result[0] = first_msg
         return result
 
@@ -205,7 +247,7 @@ class AgentOrchestrator:
 
         async def _run_one(tc: dict) -> dict:
             # Run in thread pool since tool execution is sync
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(
                 None, execute_tool, tc["name"], tc["input"]
             )

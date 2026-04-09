@@ -302,6 +302,27 @@ DEFERRED_TOOL_DEFINITIONS: list[dict] = [
     },
 ]
 
+ACTIVE_TOOL_NAMES = frozenset(
+    {
+        "lookup_specifications",
+        "lookup_duty_cycle",
+        "lookup_polarity",
+        "lookup_troubleshooting",
+        "lookup_safety_warnings",
+        "clarify_question",
+        "get_page_image",
+        "diagnose_weld",
+        "render_artifact",
+    }
+)
+
+DEFERRED_TOOL_MESSAGES = {
+    "lookup_settings": (
+        "lookup_settings is deferred until the Settings Chart is ingested as grounded data."
+    ),
+    "search_manual": "search_manual is deferred until hybrid retrieval is implemented.",
+}
+
 
 def get_active_tools() -> list[dict]:
     """Return only tools that have working backends.
@@ -309,19 +330,23 @@ def get_active_tools() -> list[dict]:
     Call this instead of using TOOL_DEFINITIONS directly to avoid
     exposing stub tools to the agent.
     """
-    return TOOL_DEFINITIONS
+    all_tools = TOOL_DEFINITIONS + DEFERRED_TOOL_DEFINITIONS
+    active_tools = [tool for tool in all_tools if tool["name"] in ACTIVE_TOOL_NAMES]
+    return active_tools
 
 
-def _run_validation(query_type: str, result: dict) -> dict:
-    """Run deterministic validation on exact-data tool results.
+def _attach_validation(query_type: str, result: dict, payload: dict | None = None) -> dict:
+    """Attach validation metadata to exact-data tool results.
 
-    For current exact-data tools the returned payload is itself the ground truth,
-    but wiring validation here ensures future transforms cannot bypass checks.
+    This is currently a validation hook over canonicalized return payloads.
+    It is not yet independent ground-truth verification until later phases wire
+    a second source of truth into the validation path.
     """
+    validation_payload = payload or result
     validation = validate_exact_answer(
         query_type=query_type,
-        proposed=result,
-        ground_truth=result,
+        proposed=validation_payload,
+        ground_truth=validation_payload,
     )
     if not validation["valid"]:
         return {
@@ -341,51 +366,26 @@ def _execute_uncached(name: str, params: dict) -> dict:
     """Execute a tool and return its result."""
     store = get_store()
 
+    if name in DEFERRED_TOOL_MESSAGES:
+        return {"error": DEFERRED_TOOL_MESSAGES[name], "deferred": True}
+
     if name == "lookup_specifications":
         result = store.get_specs(params["process"], params["voltage"])
         if result is None:
             return {"error": f"No specs found for {params['process']} at {params['voltage']}"}
-        return _run_validation("specifications", result)
+        return result
 
     if name == "lookup_duty_cycle":
         result = store.get_duty_cycle(params["process"], params["voltage"])
         if result is None:
             return {"error": f"No duty cycle for {params['process']} at {params['voltage']}"}
-        flat_result = {
-            "duty_cycle_percent": result["rated"]["duty_cycle_percent"],
-            "amperage": result["rated"]["amperage"],
-            "weld_minutes": result["rated"]["weld_minutes"],
-            "rest_minutes": result["rated"]["rest_minutes"],
-        }
-        validation = validate_exact_answer(
-            query_type="duty_cycle",
-            proposed=flat_result,
-            ground_truth=flat_result,
-        )
-        if not validation["valid"]:
-            return {"error": "Validation failed", "validation": validation}
-        result_with_validation = dict(result)
-        result_with_validation["validation"] = validation
-        return result_with_validation
+        return result
 
     if name == "lookup_polarity":
         result = store.get_polarity(params["process"])
         if result is None:
             return {"error": f"No polarity data for {params['process']}"}
-        validation_input = {
-            "polarity_type": result["polarity_type"],
-            "ground_clamp_cable": result["ground_clamp_cable"],
-        }
-        validation = validate_exact_answer(
-            query_type="polarity",
-            proposed=validation_input,
-            ground_truth=validation_input,
-        )
-        if not validation["valid"]:
-            return {"error": "Validation failed", "validation": validation}
-        result_with_validation = dict(result)
-        result_with_validation["validation"] = validation
-        return result_with_validation
+        return result
 
     if name == "lookup_troubleshooting":
         problem = params.get("problem")
@@ -408,10 +408,6 @@ def _execute_uncached(name: str, params: dict) -> dict:
 
     if name == "clarify_question":
         return {"question": params["question"], "options": params.get("options")}
-
-    if name == "search_manual":
-        # Placeholder — will be implemented in Phase 6/8 with hybrid retrieval
-        return {"results": [], "note": "Search not yet implemented"}
 
     if name == "get_page_image":
         page = params["page"]
@@ -446,6 +442,33 @@ def _execute_uncached(name: str, params: dict) -> dict:
     return {"error": f"Unknown tool: {name}"}
 
 
+def _finalize_tool_result(name: str, result: dict) -> dict:
+    """Attach validation or other post-cache metadata."""
+    if "error" in result:
+        return result
+
+    if name == "lookup_specifications":
+        return _attach_validation("specifications", result)
+
+    if name == "lookup_duty_cycle":
+        payload = {
+            "duty_cycle_percent": result["rated"]["duty_cycle_percent"],
+            "amperage": result["rated"]["amperage"],
+            "weld_minutes": result["rated"]["weld_minutes"],
+            "rest_minutes": result["rated"]["rest_minutes"],
+        }
+        return _attach_validation("duty_cycle", result, payload=payload)
+
+    if name == "lookup_polarity":
+        payload = {
+            "polarity_type": result["polarity_type"],
+            "ground_clamp_cable": result["ground_clamp_cable"],
+        }
+        return _attach_validation("polarity", result, payload=payload)
+
+    return result
+
+
 @lru_cache(maxsize=256)
 def _execute_cached(name: str, params_json: str) -> str:
     """Cached wrapper — key is (tool_name, sorted_json_params)."""
@@ -459,8 +482,8 @@ def execute_tool(name: str, params: dict) -> dict:
     # Don't cache non-deterministic tools
     non_cacheable = {"clarify_question", "render_artifact", "search_manual"}
     if name in non_cacheable:
-        return _execute_uncached(name, params)
+        return _finalize_tool_result(name, _execute_uncached(name, params))
 
     params_json = json.dumps(params, sort_keys=True)
     result_json = _execute_cached(name, params_json)
-    return json.loads(result_json)
+    return _finalize_tool_result(name, json.loads(result_json))

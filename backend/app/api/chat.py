@@ -50,11 +50,24 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
     yield _sse_event("session_update", session.to_dict())
 
     # Run agent and stream events
+    assistant_chunks: list[str] = []
+    clarification_question: str | None = None
     async for event in orchestrator.run(
         user_message=request.message,
         session=session,
         images=request.images,
     ):
+        if event["event"] == "text_delta":
+            assistant_chunks.append(event["data"].get("content", ""))
+        elif event["event"] == "clarification":
+            clarification_question = event["data"].get("question")
+        elif event["event"] == "done":
+            status = event["data"].get("status", "completed")
+            assistant_message = "".join(assistant_chunks).strip()
+            if status == "completed" and assistant_message:
+                session_manager.append_turn(session, request.message, assistant_message)
+            elif status == "clarification_required" and clarification_question:
+                session_manager.append_turn(session, request.message, clarification_question)
         yield _sse_event(event["event"], event["data"])
 
 

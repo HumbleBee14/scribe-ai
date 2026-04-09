@@ -1,4 +1,6 @@
 """Tests for session management."""
+from datetime import datetime, timedelta, timezone
+
 from app.session.manager import Session, SessionManager
 
 
@@ -66,3 +68,37 @@ def test_session_manager_detects_flux_cored() -> None:
     mgr.update_from_message(session, "I'm using flux-cored wire at 120V")
     assert session.current_process == "flux_cored"
     assert session.current_voltage == "120v"
+
+
+def test_session_manager_detects_thickness() -> None:
+    mgr = SessionManager()
+    session = mgr.get_or_create("s4")
+    mgr.update_from_message(session, "I am welding mild steel that is 16 ga")
+    assert session.current_thickness == "16ga"
+
+
+def test_session_manager_records_safety_warnings() -> None:
+    mgr = SessionManager()
+    session = mgr.get_or_create("s5")
+    mgr.record_safety_warning(session, "electrical")
+    payload = session.to_dict()
+    assert payload["safety_warnings_shown"] == ["electrical"]
+
+
+def test_session_manager_appends_and_trims_history() -> None:
+    mgr = SessionManager(max_history_messages=4)
+    session = mgr.get_or_create("s6")
+    mgr.append_turn(session, "u1", "a1")
+    mgr.append_turn(session, "u2", "a2")
+    mgr.append_turn(session, "u3", "a3")
+    history = mgr.get_message_history(session)
+    assert len(history) == 4
+    assert history[0]["content"] == "u2"
+    assert history[-1]["content"] == "a3"
+
+
+def test_session_manager_expires_old_sessions() -> None:
+    mgr = SessionManager(max_age_seconds=10)
+    session = mgr.get_or_create("expired")
+    session.last_seen_at = datetime.now(timezone.utc) - timedelta(seconds=20)
+    assert mgr.get("expired") is None

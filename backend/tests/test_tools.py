@@ -97,6 +97,12 @@ def test_lookup_settings_is_not_active_until_grounded() -> None:
     assert "lookup_settings" not in active_names
 
 
+def test_deferred_tools_return_explicit_error() -> None:
+    result = execute_tool("lookup_settings", {"process": "mig"})
+    assert result["deferred"] is True
+    assert "deferred" in result["error"]
+
+
 def test_lookup_safety_electrical() -> None:
     result = execute_tool("lookup_safety_warnings", {"category": "electrical"})
     assert result["level"] == "danger"
@@ -146,6 +152,23 @@ def test_execute_tool_runs_validation_for_exact_duty_cycle(monkeypatch) -> None:
     assert result["rated"]["duty_cycle_percent"] == 25
     assert calls
     assert calls[0][0] == "duty_cycle"
+
+
+def test_execute_tool_runs_validation_for_specifications(monkeypatch) -> None:
+    calls: list[tuple[str, dict, dict]] = []
+
+    def fake_validate(query_type: str, proposed: dict, ground_truth: dict) -> dict:
+        calls.append((query_type, proposed, ground_truth))
+        return {"valid": True, "reason": "ok", "mismatches": []}
+
+    monkeypatch.setattr(tools_module, "validate_exact_answer", fake_validate, raising=False)
+    tools_module._execute_cached.cache_clear()
+
+    result = execute_tool("lookup_specifications", {"process": "mig", "voltage": "240v"})
+
+    assert result["weldable_materials"]
+    assert calls
+    assert calls[0][0] == "specifications"
 
 
 def test_execute_tool_runs_validation_for_exact_polarity(monkeypatch) -> None:
