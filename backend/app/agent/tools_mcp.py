@@ -294,6 +294,32 @@ async def mcp_render_artifact(args: dict[str, Any]) -> dict[str, Any]:
     return _run_tool("render_artifact", args)
 
 
+@tool(
+    "search_manual",
+    (
+        "Search the product manual for relevant information using text search. "
+        "USE for open-ended questions not covered by exact-data lookup tools. "
+        "Returns ranked text chunks with page numbers and section titles."
+    ),
+    {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Search query",
+            },
+            "max_results": {
+                "type": "integer",
+                "description": "Max results to return (default 5)",
+            },
+        },
+        "required": ["query"],
+    },
+)
+async def mcp_search_manual(args: dict[str, Any]) -> dict[str, Any]:
+    return _run_tool("search_manual", args)
+
+
 # ---------------------------------------------------------------------------
 # MCP Server factory
 # ---------------------------------------------------------------------------
@@ -308,6 +334,7 @@ ALL_MCP_TOOLS = [
     mcp_get_page_image,
     mcp_diagnose_weld,
     mcp_render_artifact,
+    mcp_search_manual,
 ]
 
 

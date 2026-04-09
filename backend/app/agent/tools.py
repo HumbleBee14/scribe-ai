@@ -11,6 +11,7 @@ import json
 from functools import lru_cache
 
 from app.knowledge.structured import get_store
+from app.retrieval.service import get_retrieval_service
 from app.validation.service import validate_exact_answer
 
 # ---------------------------------------------------------------------------
@@ -313,6 +314,7 @@ ACTIVE_TOOL_NAMES = frozenset(
         "get_page_image",
         "diagnose_weld",
         "render_artifact",
+        "search_manual",
     }
 )
 
@@ -320,7 +322,6 @@ DEFERRED_TOOL_MESSAGES = {
     "lookup_settings": (
         "lookup_settings is deferred until the Settings Chart is ingested as grounded data."
     ),
-    "search_manual": "search_manual is deferred until hybrid retrieval is implemented.",
 }
 
 
@@ -438,6 +439,15 @@ def _execute_uncached(name: str, params: dict) -> dict:
             "code": params["code"],
             "source_pages": params.get("source_pages", []),
         }
+
+    if name == "search_manual":
+        retrieval = get_retrieval_service()
+        query = params.get("query", "")
+        max_results = params.get("max_results", 5)
+        results = retrieval.search(query, max_results=max_results)
+        if not results:
+            return {"results": [], "note": f"No results found for '{query}'"}
+        return {"results": results, "count": len(results)}
 
     return {"error": f"Unknown tool: {name}"}
 

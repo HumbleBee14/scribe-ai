@@ -24,11 +24,10 @@ def test_active_tools_have_working_backends() -> None:
         "get_page_image",
         "diagnose_weld",
         "render_artifact",
+        "search_manual",
     ]
     for name in expected_active:
         assert name in active_names, f"Missing active tool: {name}"
-    # search_manual should NOT be in active tools (deferred)
-    assert "search_manual" not in active_names
 
 
 def test_deferred_tools_exist() -> None:

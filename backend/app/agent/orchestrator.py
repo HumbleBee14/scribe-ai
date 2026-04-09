@@ -38,6 +38,7 @@ _TOOL_LABELS: dict[str, str] = {
     "get_page_image": "Loading manual page",
     "diagnose_weld": "Reviewing weld symptoms",
     "render_artifact": "Generating visual aid",
+    "search_manual": "Searching manual",
     "Read": "Reading from manual",
 }
 
