@@ -1,29 +1,34 @@
-"""Agent orchestrator — agentic loop with tool use and SSE event output.
+"""Agent orchestrator using the Claude Agent SDK.
 
-This is the core runtime: it sends messages to the LLM provider, handles tool
-calls, and yields SSE events. It depends on the LLMProvider abstraction, not
-on any vendor SDK directly.
+Uses query() + resume=session_id for multi-turn conversation continuity.
+Custom tools are exposed via MCP. Built-in Read tool is enabled as a
+supplemental capability for broad manual questions.
+
+SDK events are mapped to our frontend SSE contract.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ResultMessage,
+    StreamEvent,
+    query,
+)
+
 from app.agent.prompts import build_system_prompt
-from app.agent.provider import ContentBlock, LLMProvider, ProviderError
-from app.agent.tools import execute_tool, get_active_tools
-from app.core.config import settings
-from app.knowledge.full_context import FullContextProvider
+from app.agent.tools_mcp import MCP_SERVER_NAME, create_knowledge_mcp_server
+from app.core.config import FILES_DIR, settings
 from app.session.manager import Session
 
 logger = logging.getLogger(__name__)
 
-MAX_TOOL_TURNS = 10
-
-TOOL_PROGRESS_LABELS: dict[str, str] = {
+_TOOL_LABELS: dict[str, str] = {
     "lookup_specifications": "Looking up specifications",
     "lookup_duty_cycle": "Looking up duty cycle",
     "lookup_polarity": "Checking polarity setup",
@@ -33,26 +38,40 @@ TOOL_PROGRESS_LABELS: dict[str, str] = {
     "get_page_image": "Loading manual page",
     "diagnose_weld": "Reviewing weld symptoms",
     "render_artifact": "Generating visual aid",
+    "Read": "Reading from manual",
 }
 
 
-class AgentOrchestrator:
-    """Runs the agentic loop: message → tool_use → execute → repeat.
+def _strip_mcp_prefix(tool_name: str) -> str:
+    """Remove MCP server prefix: mcp__welding-knowledge__X -> X"""
+    prefix = f"mcp__{MCP_SERVER_NAME}__"
+    if tool_name.startswith(prefix):
+        return tool_name[len(prefix):]
+    return tool_name
 
-    Accepts an LLMProvider via constructor injection for testability
-    and clean SDK boundaries.
+
+def _get_tool_label(tool_name: str) -> str:
+    clean = _strip_mcp_prefix(tool_name)
+    return _TOOL_LABELS.get(clean, clean)
+
+
+class AgentOrchestrator:
+    """Runs the Claude Agent SDK and maps events to our SSE contract.
+
+    Multi-turn: captures SDK session_id from ResultMessage, stores it on
+    our app Session, and passes resume=sdk_session_id on subsequent turns.
+
+    Images: when the user uploads images, uses AsyncIterable prompt format
+    to send image content blocks alongside text.
+
+    Built-in tools: Read is enabled for broad manual questions. Custom MCP
+    tools handle exact factual lookups.
     """
 
-    def __init__(
-        self,
-        provider: LLMProvider,
-        model: str | None = None,
-        full_context: FullContextProvider | None = None,
-    ) -> None:
-        self._provider = provider
-        self._model = model or settings.llm_model
-        self._tools = get_active_tools()
-        self._full_context = full_context or FullContextProvider()
+    def __init__(self) -> None:
+        self._mcp_server = create_knowledge_mcp_server()
+        self._model = settings.llm_model
+        self._manual_path = str(FILES_DIR / "owner-manual.pdf")
 
     async def run(
         self,
@@ -60,11 +79,103 @@ class AgentOrchestrator:
         session: Session,
         images: list[dict[str, str]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Run the agent and yield SSE events."""
-        # Build message content
-        content: list[dict[str, Any]] = []
+        """Run the agent and yield SSE events for the frontend."""
 
+        # Build prompt: either string (no images) or AsyncIterable (with images)
         if images:
+            prompt: Any = self._build_multimodal_prompt(user_message, images)
+        else:
+            prompt = user_message
+
+        # Build options
+        options = ClaudeAgentOptions(
+            model=self._model,
+            system_prompt=build_system_prompt(
+                session.context_summary(),
+                manual_path=self._manual_path,
+            ),
+            mcp_servers={MCP_SERVER_NAME: self._mcp_server},
+            max_turns=10,
+            permission_mode="bypassPermissions",
+            include_partial_messages=True,
+            # Built-in tools: Read for broad manual questions
+            allowed_tools=[
+                "Read",
+                f"mcp__{MCP_SERVER_NAME}__*",  # all custom MCP tools
+            ],
+        )
+
+        # Multi-turn: resume previous SDK session if available
+        if session.sdk_session_id:
+            options.resume = session.sdk_session_id
+
+        # Track state for SSE event mapping
+        clarification_requested = False
+        has_error = False
+
+        try:
+            async for event in query(prompt=prompt, options=options):
+                # Map each SDK event to our SSE events
+                if isinstance(event, StreamEvent):
+                    for sse in self._map_stream_event(event, session):
+                        if sse["event"] == "clarification":
+                            clarification_requested = True
+                        yield sse
+
+                elif isinstance(event, AssistantMessage):
+                    for sse in self._map_assistant_message(event, session):
+                        if sse["event"] == "clarification":
+                            clarification_requested = True
+                        yield sse
+
+                elif isinstance(event, ResultMessage):
+                    # Capture SDK session ID for multi-turn resume
+                    if event.session_id:
+                        session.sdk_session_id = event.session_id
+
+                    if event.is_error:
+                        has_error = True
+                        yield {
+                            "event": "error",
+                            "data": {
+                                "message": event.result or "Agent error",
+                            },
+                        }
+                    else:
+                        status = (
+                            "clarification_required"
+                            if clarification_requested
+                            else "completed"
+                        )
+                        yield {
+                            "event": "done",
+                            "data": {
+                                "status": status,
+                                "usage": event.usage or {},
+                                "turns": event.num_turns,
+                                "cost_usd": event.total_cost_usd,
+                            },
+                        }
+
+        except Exception:
+            logger.exception("Agent SDK runtime error")
+            if not has_error:
+                yield {
+                    "event": "error",
+                    "data": {
+                        "message": "Agent runtime error. Please try again.",
+                    },
+                }
+
+    async def _build_multimodal_prompt(
+        self,
+        text: str,
+        images: list[dict[str, str]],
+    ) -> Any:
+        """Build an AsyncIterable prompt with image content blocks."""
+
+        async def _generate():
+            content: list[dict[str, Any]] = []
             for img in images:
                 content.append({
                     "type": "image",
@@ -74,213 +185,163 @@ class AgentOrchestrator:
                         "data": img["data"],
                     },
                 })
+            content.append({"type": "text", "text": text})
+            yield {
+                "type": "user",
+                "message": {
+                    "role": "user",
+                    "content": content,
+                },
+            }
 
-        content.append({"type": "text", "text": user_message})
+        return _generate()
 
-        # Build messages from session history + current user turn
-        messages: list[dict[str, Any]] = [
-            *session.message_history,
-            {"role": "user", "content": content},
-        ]
+    def _map_stream_event(
+        self,
+        event: StreamEvent,
+        session: Session,
+    ) -> list[dict[str, Any]]:
+        """Map StreamEvent to SSE events."""
+        evt = event.event
+        evt_type = evt.get("type", "")
+        results: list[dict[str, Any]] = []
 
-        # System prompt with session context
-        system_content: list[dict[str, Any]] = [
-            {"type": "text", "text": build_system_prompt(session.context_summary())},
-        ]
-
-        # Agentic loop
-        for turn in range(MAX_TOOL_TURNS):
-            try:
-                response = await self._provider.create_message(
-                    model=self._model,
-                    max_tokens=8096,
-                    system=system_content,
-                    tools=self._tools,
-                    messages=self._inject_full_context(messages),
-                )
-            except ProviderError as e:
-                logger.exception("LLM provider error on turn %d", turn)
-                yield {"event": "error", "data": {"message": str(e)}}
-                return
-
-            # Process response content blocks
-            tool_calls: list[dict[str, Any]] = []
-            for block in response.content:
-                if block.type == "text":
-                    yield {"event": "text_delta", "data": {"content": block.text}}
-                elif block.type == "tool_use":
-                    yield {
+        if evt_type == "content_block_start":
+            cb = evt.get("content_block", {})
+            cb_type = cb.get("type", "")
+            if cb_type == "tool_use":
+                tool_name = cb.get("name", "")
+                # Skip internal ToolSearch calls
+                if tool_name != "ToolSearch":
+                    results.append({
                         "event": "tool_start",
                         "data": {
-                            "tool": block.name,
-                            "input": block.input,
-                            "label": TOOL_PROGRESS_LABELS.get(block.name, block.name),
+                            "tool": _strip_mcp_prefix(tool_name),
+                            "input": {},
+                            "label": _get_tool_label(tool_name),
                         },
-                    }
-                    tool_calls.append({
-                        "id": block.id,
-                        "name": block.name,
-                        "input": block.input,
                     })
 
-            # If no tool calls, we're done
-            if response.stop_reason == "end_turn" or not tool_calls:
-                yield {
-                    "event": "done",
-                    "data": {
-                        "status": "completed",
-                        "usage": {
-                            "input_tokens": response.input_tokens,
-                            "output_tokens": response.output_tokens,
-                        },
-                        "turns": turn + 1,
-                    },
-                }
-                return
+        elif evt_type == "content_block_delta":
+            delta = evt.get("delta", {})
+            delta_type = delta.get("type", "")
+            if delta_type == "text_delta":
+                text = delta.get("text", "")
+                if text:
+                    results.append({
+                        "event": "text_delta",
+                        "data": {"content": text},
+                    })
 
-            # Append assistant message to conversation
-            assistant_content = _blocks_to_dicts(response.content)
-            messages.append({"role": "assistant", "content": assistant_content})
+        return results
 
-            # Execute tools in parallel
-            tool_results = await self._execute_tools_parallel(tool_calls)
+    def _map_assistant_message(
+        self,
+        msg: AssistantMessage,
+        session: Session,
+    ) -> list[dict[str, Any]]:
+        """Map a complete AssistantMessage to SSE events."""
+        results: list[dict[str, Any]] = []
 
-            # Emit tool results and build tool_result message
-            tool_result_content: list[dict[str, Any]] = []
-            clarification_requested = False
+        for block in msg.content:
+            block_type = getattr(block, "type", None) or type(block).__name__
 
-            for tc, result in zip(tool_calls, tool_results):
-                result_str = json.dumps(result) if isinstance(result, (dict, list)) else str(result)
-                tool_result_content.append({
-                    "type": "tool_result",
-                    "tool_use_id": tc["id"],
-                    "content": result_str,
+            if block_type == "tool_use" and hasattr(block, "name"):
+                tool_name = _strip_mcp_prefix(block.name)
+                tool_input = getattr(block, "input", {}) or {}
+
+                # Skip ToolSearch (internal SDK tool)
+                if block.name == "ToolSearch":
+                    continue
+
+                results.extend(
+                    self._emit_tool_specific_events(tool_name, tool_input, session)
+                )
+
+            elif block_type == "tool_result" and hasattr(block, "content"):
+                # Tool result came back. Check for safety warnings in results.
+                content_str = ""
+                if isinstance(block.content, str):
+                    content_str = block.content
+                elif isinstance(block.content, list):
+                    for cb in block.content:
+                        if hasattr(cb, "text"):
+                            content_str += cb.text
+
+                # Try to parse and detect safety warnings in results
+                if content_str:
+                    try:
+                        data = json.loads(content_str)
+                        if isinstance(data, dict) and "level" in data and "items" in data:
+                            results.append({
+                                "event": "safety_warning",
+                                "data": {
+                                    "level": data.get("level", "warning"),
+                                    "content": "; ".join(data.get("items", [])),
+                                },
+                            })
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+        return results
+
+    def _emit_tool_specific_events(
+        self,
+        tool_name: str,
+        tool_input: dict[str, Any],
+        session: Session,
+    ) -> list[dict[str, Any]]:
+        """Emit specialized SSE events based on which tool was called."""
+        results: list[dict[str, Any]] = []
+
+        if tool_name == "lookup_safety_warnings":
+            category = tool_input.get("category")
+            if category:
+                session.safety_warnings_shown.add(category)
+                results.append({
+                    "event": "session_update",
+                    "data": session.to_dict(),
                 })
 
-                has_error = isinstance(result, dict) and "error" in result
-                yield {
-                    "event": "tool_end",
-                    "data": {
-                        "tool": tc["name"],
-                        "label": TOOL_PROGRESS_LABELS.get(tc["name"], tc["name"]),
-                        "ok": not has_error,
-                    },
-                }
-
-                # Emit special events for certain tools
-                for extra in _emit_tool_specific_events(tc, result, session):
-                    yield extra
-
-                if tc["name"] == "clarify_question":
-                    clarification_requested = True
-
-            # If clarification was requested, stop and wait for user input
-            if clarification_requested:
-                yield {
-                    "event": "done",
-                    "data": {"status": "clarification_required", "turns": turn + 1},
-                }
-                return
-
-            messages.append({"role": "user", "content": tool_result_content})
-
-        # Exhausted max turns
-        yield {
-            "event": "error",
-            "data": {"message": f"Agent exceeded {MAX_TOOL_TURNS} tool turns"},
-        }
-
-    def _inject_full_context(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Prepend the full manual PDF to the first user message if available."""
-        if not settings.full_context_mode or not self._full_context.is_available():
-            return messages
-
-        result = list(messages)
-        if result and result[0]["role"] == "user":
-            first_msg = dict(result[0])
-            original = first_msg["content"]
-            doc_block = self._full_context.build_document_block()
-            if isinstance(original, list):
-                first_msg["content"] = [doc_block, *original]
-            else:
-                first_msg["content"] = [doc_block, {"type": "text", "text": str(original)}]
-            result[0] = first_msg
-        return result
-
-    async def _execute_tools_parallel(
-        self, tool_calls: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """Execute multiple tool calls in parallel."""
-
-        async def _run_one(tc: dict[str, Any]) -> dict[str, Any]:
-            loop = asyncio.get_running_loop()
-            try:
-                return await loop.run_in_executor(
-                    None, execute_tool, tc["name"], tc["input"]
-                )
-            except Exception:
-                logger.exception("Tool execution failed: %s", tc["name"])
-                return {"error": f"Tool {tc['name']} failed unexpectedly"}
-
-        return list(await asyncio.gather(*[_run_one(tc) for tc in tool_calls]))
-
-
-def _blocks_to_dicts(blocks: list[ContentBlock]) -> list[dict[str, Any]]:
-    """Convert ContentBlock list to dicts for Anthropic message format."""
-    result: list[dict[str, Any]] = []
-    for b in blocks:
-        if b.type == "text":
-            result.append({"type": "text", "text": b.text})
-        elif b.type == "tool_use":
-            result.append({
-                "type": "tool_use",
-                "id": b.id,
-                "name": b.name,
-                "input": b.input,
+        elif tool_name == "clarify_question":
+            question = tool_input.get("question", "")
+            options = tool_input.get("options")
+            results.append({
+                "event": "clarification",
+                "data": {"question": question, "options": options},
             })
-    return result
 
+        elif tool_name == "get_page_image":
+            page = tool_input.get("page")
+            if page:
+                results.append({
+                    "event": "image",
+                    "data": {
+                        "page": page,
+                        "url": f"/assets/images/page_{page:02d}.png",
+                    },
+                })
 
-def _emit_tool_specific_events(
-    tc: dict[str, Any],
-    result: Any,
-    session: Session,
-) -> list[dict[str, Any]]:
-    """Emit specialized SSE events for specific tool types."""
-    events: list[dict[str, Any]] = []
+        elif tool_name == "render_artifact":
+            results.append({
+                "event": "artifact",
+                "data": {
+                    "id": f"art_{hash(tool_input.get('title', '')) % 100000:05d}",
+                    "type": tool_input.get("type", ""),
+                    "title": tool_input.get("title", ""),
+                    "code": tool_input.get("code", ""),
+                    "source_pages": tool_input.get("source_pages", []),
+                },
+            })
 
-    if not isinstance(result, dict):
-        return events
-
-    if tc["name"] == "render_artifact":
-        events.append({"event": "artifact", "data": result})
-
-    elif tc["name"] == "get_page_image":
-        events.append({
-            "event": "image",
-            "data": {"page": result.get("page"), "url": result.get("image_url")},
-        })
-
-    elif tc["name"] == "clarify_question":
-        events.append({
-            "event": "clarification",
+        # Emit tool_end for all recognized tools
+        results.append({
+            "event": "tool_end",
             "data": {
-                "question": result.get("question", ""),
-                "options": result.get("options"),
+                "tool": tool_name,
+                "label": _get_tool_label(tool_name),
+                "ok": True,
             },
         })
 
-    elif tc["name"] == "lookup_safety_warnings":
-        category = tc["input"].get("category")
-        if category:
-            session.safety_warnings_shown.add(category)
-        events.append({
-            "event": "safety_warning",
-            "data": {
-                "level": result.get("level", "warning"),
-                "content": "; ".join(result.get("items", [])),
-            },
-        })
-        events.append({"event": "session_update", "data": session.to_dict()})
-
-    return events
+        return results

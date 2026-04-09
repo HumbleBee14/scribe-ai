@@ -56,12 +56,30 @@ After answering, suggest 2-3 contextual follow-up questions the user might have.
 Format them as a list at the end of your response.
 
 {session_context}
+
+{manual_reference}
 """
 
 
-def build_system_prompt(session_context: str = "") -> str:
-    """Build the system prompt with optional session context injection."""
+def build_system_prompt(
+    session_context: str = "",
+    manual_path: str = "",
+) -> str:
+    """Build the system prompt with session context and manual file reference."""
     ctx = ""
     if session_context:
         ctx = f"\n## Current session context\n{session_context}\n"
-    return SYSTEM_PROMPT.format(session_context=ctx)
+
+    manual_ref = ""
+    if manual_path:
+        manual_ref = (
+            f"\n## Manual file reference\n"
+            f"The product manual is available at: {manual_path}\n"
+            f"You can use the Read tool to look up any information from the manual "
+            f"when your specialized lookup tools don't cover the question.\n"
+        )
+
+    return SYSTEM_PROMPT.format(
+        session_context=ctx,
+        manual_reference=manual_ref,
+    )

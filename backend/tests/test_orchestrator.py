@@ -1,138 +1,125 @@
-"""Tests for agent orchestrator runtime behavior."""
-from __future__ import annotations
-
-from typing import Any
-
-import pytest
-
-import app.agent.orchestrator as orchestrator_module
-from app.agent.orchestrator import AgentOrchestrator
-from app.agent.provider import ContentBlock, LLMProvider, ModelResponse
+"""Tests for the Agent SDK orchestrator (event mapping, tool resolution, session)."""
+from app.agent.orchestrator import (
+    AgentOrchestrator,
+    _get_tool_label,
+    _strip_mcp_prefix,
+)
 from app.session.manager import Session
 
 
-class FakeProvider(LLMProvider):
-    """Test double that returns pre-configured responses."""
-
-    def __init__(self, responses: list[ModelResponse]) -> None:
-        self._responses = list(responses)
-        self.calls: list[dict[str, Any]] = []
-
-    async def create_message(self, **kwargs: Any) -> ModelResponse:
-        self.calls.append(kwargs)
-        return self._responses.pop(0)
-
-
-class FakeFullContext:
-    def __init__(self, available: bool = False) -> None:
-        self._available = available
-
-    def is_available(self) -> bool:
-        return self._available
-
-    def build_document_block(self) -> dict:
-        return {"type": "document", "source": {"type": "base64", "data": "abc"}}
-
-
-def _text_response(text: str) -> ModelResponse:
-    return ModelResponse(
-        content=[ContentBlock(type="text", text=text)],
-        stop_reason="end_turn",
-        input_tokens=10,
-        output_tokens=5,
+def test_strip_mcp_prefix_removes_server_name() -> None:
+    assert (
+        _strip_mcp_prefix("mcp__welding-knowledge__lookup_duty_cycle")
+        == "lookup_duty_cycle"
     )
 
 
-def _tool_response(tool_id: str, name: str, tool_input: dict) -> ModelResponse:
-    return ModelResponse(
-        content=[ContentBlock(type="tool_use", id=tool_id, name=name, input=tool_input)],
-        stop_reason="tool_use",
-        input_tokens=10,
-        output_tokens=5,
+def test_strip_mcp_prefix_passes_through_plain_name() -> None:
+    assert _strip_mcp_prefix("lookup_duty_cycle") == "lookup_duty_cycle"
+
+
+def test_strip_mcp_prefix_handles_toolsearch() -> None:
+    assert _strip_mcp_prefix("ToolSearch") == "ToolSearch"
+
+
+def test_get_tool_label_known_tool() -> None:
+    assert _get_tool_label("lookup_duty_cycle") == "Looking up duty cycle"
+    assert _get_tool_label("lookup_polarity") == "Checking polarity setup"
+    assert _get_tool_label("lookup_safety_warnings") == "Reviewing safety warnings"
+    assert _get_tool_label("Read") == "Reading from manual"
+
+
+def test_get_tool_label_with_mcp_prefix() -> None:
+    assert (
+        _get_tool_label("mcp__welding-knowledge__lookup_duty_cycle")
+        == "Looking up duty cycle"
     )
 
 
-@pytest.mark.asyncio
-async def test_orchestrator_stops_after_clarification(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    provider = FakeProvider([
-        _tool_response("tool-1", "clarify_question", {"question": "Which process?"}),
-    ])
-    orchestrator = AgentOrchestrator(
-        provider=provider,
-        model="test-model",
-        full_context=FakeFullContext(),
+def test_get_tool_label_unknown_tool() -> None:
+    assert _get_tool_label("unknown_tool") == "unknown_tool"
+
+
+def test_orchestrator_class_exists() -> None:
+    assert AgentOrchestrator is not None
+
+
+def test_session_stores_sdk_session_id() -> None:
+    """Session should be able to store SDK session ID for resume."""
+    session = Session(id="test")
+    assert session.sdk_session_id is None
+    session.sdk_session_id = "sdk-abc-123"
+    assert session.sdk_session_id == "sdk-abc-123"
+
+
+def test_emit_tool_specific_events_safety() -> None:
+    """Safety warnings should update session and emit events."""
+    orch = AgentOrchestrator()
+    session = Session(id="test")
+
+    events = orch._emit_tool_specific_events(
+        "lookup_safety_warnings",
+        {"category": "electrical"},
+        session,
     )
-    orchestrator._tools = [{"name": "clarify_question"}]
-
-    monkeypatch.setattr(
-        orchestrator_module,
-        "execute_tool",
-        lambda name, params: {"question": params["question"], "options": ["MIG", "TIG"]},
-    )
-
-    session = Session(id="s1")
-    events = [event async for event in orchestrator.run("What's the duty cycle?", session)]
-
-    event_types = [event["event"] for event in events]
-    assert event_types == ["tool_start", "tool_end", "clarification", "done"]
-    assert events[-1]["data"]["status"] == "clarification_required"
-    assert len(provider.calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_orchestrator_tracks_safety_warning_and_completes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    provider = FakeProvider([
-        _tool_response("tool-1", "lookup_safety_warnings", {"category": "electrical"}),
-        _text_response("Use proper grounding."),
-    ])
-    orchestrator = AgentOrchestrator(
-        provider=provider,
-        model="test-model",
-        full_context=FakeFullContext(),
-    )
-    orchestrator._tools = [{"name": "lookup_safety_warnings"}]
-
-    monkeypatch.setattr(
-        orchestrator_module,
-        "execute_tool",
-        lambda _name, _params: {"level": "danger", "items": ["Ground the machine"]},
-    )
-
-    session = Session(id="s2")
-    events = [event async for event in orchestrator.run("How do I wire this safely?", session)]
 
     assert "electrical" in session.safety_warnings_shown
-    event_types = [event["event"] for event in events]
-    assert event_types == [
-        "tool_start",
-        "tool_end",
-        "safety_warning",
-        "session_update",
-        "text_delta",
-        "done",
-    ]
-    assert events[0]["data"]["label"] == "Reviewing safety warnings"
-    assert events[-1]["data"]["status"] == "completed"
+    event_types = [e["event"] for e in events]
+    assert "session_update" in event_types
+    assert "tool_end" in event_types
 
 
-def test_inject_full_context_handles_string_history() -> None:
-    provider = FakeProvider([])
-    orchestrator = AgentOrchestrator(
-        provider=provider,
-        model="test-model",
-        full_context=FakeFullContext(available=True),
+def test_emit_tool_specific_events_clarification() -> None:
+    """Clarification tool should emit clarification event."""
+    orch = AgentOrchestrator()
+    session = Session(id="test")
+
+    events = orch._emit_tool_specific_events(
+        "clarify_question",
+        {"question": "Which process?", "options": ["MIG", "TIG"]},
+        session,
     )
 
-    messages = [
-        {"role": "user", "content": "Earlier question"},
-        {"role": "assistant", "content": "Earlier answer"},
-    ]
+    clarification = [e for e in events if e["event"] == "clarification"]
+    assert len(clarification) == 1
+    assert clarification[0]["data"]["question"] == "Which process?"
+    assert clarification[0]["data"]["options"] == ["MIG", "TIG"]
 
-    result = orchestrator._inject_full_context(messages)
 
-    assert result[0]["content"][0]["type"] == "document"
-    assert result[0]["content"][1]["type"] == "text"
+def test_emit_tool_specific_events_page_image() -> None:
+    """get_page_image should emit image event with correct URL."""
+    orch = AgentOrchestrator()
+    session = Session(id="test")
+
+    events = orch._emit_tool_specific_events(
+        "get_page_image",
+        {"page": 13},
+        session,
+    )
+
+    image_events = [e for e in events if e["event"] == "image"]
+    assert len(image_events) == 1
+    assert image_events[0]["data"]["page"] == 13
+    assert "page_13" in image_events[0]["data"]["url"]
+
+
+def test_emit_tool_specific_events_artifact() -> None:
+    """render_artifact should emit artifact event with source pages."""
+    orch = AgentOrchestrator()
+    session = Session(id="test")
+
+    events = orch._emit_tool_specific_events(
+        "render_artifact",
+        {
+            "type": "svg",
+            "title": "TIG Polarity",
+            "code": "<svg>...</svg>",
+            "source_pages": [{"page": 24, "description": "TIG setup"}],
+        },
+        session,
+    )
+
+    artifact_events = [e for e in events if e["event"] == "artifact"]
+    assert len(artifact_events) == 1
+    assert artifact_events[0]["data"]["title"] == "TIG Polarity"
+    assert artifact_events[0]["data"]["source_pages"][0]["page"] == 24

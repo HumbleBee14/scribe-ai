@@ -10,24 +10,20 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.agent.orchestrator import AgentOrchestrator
-from app.agent.provider import AnthropicProvider
-from app.core.config import settings
 from app.session.manager import session_manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
-# Lazy singleton — created on first request to avoid import-time side effects.
-# Uses constructor injection: provider is created here, passed to orchestrator.
+# Lazy singleton: Agent SDK orchestrator, created on first request.
 _orchestrator: AgentOrchestrator | None = None
 
 
 def _get_orchestrator() -> AgentOrchestrator:
     global _orchestrator  # noqa: PLW0603
     if _orchestrator is None:
-        provider = AnthropicProvider(api_key=settings.anthropic_api_key)
-        _orchestrator = AgentOrchestrator(provider=provider)
+        _orchestrator = AgentOrchestrator()
     return _orchestrator
 
 
