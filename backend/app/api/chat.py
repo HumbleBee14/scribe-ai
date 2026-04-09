@@ -9,7 +9,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.agent.orchestrator_sdk import AgentOrchestrator
+from app.agent.orchestrator import AgentOrchestrator
 from app.session.manager import session_manager
 
 logger = logging.getLogger(__name__)
