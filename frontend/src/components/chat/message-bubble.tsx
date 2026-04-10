@@ -218,6 +218,7 @@ export function MessageBubble({
               key={i}
               block={block}
               isUser={isUser}
+              isStreaming={!!message.isStreaming}
               onSelectSourcePage={onSelectSourcePage}
               onImageClick={setLightboxSrc}
             />
@@ -381,11 +382,13 @@ function parseArtifactTags(text: string): TextSegment[] {
 function InlineBlock({
   block,
   isUser,
+  isStreaming,
   onSelectSourcePage,
   onImageClick,
 }: {
   block: ContentBlock;
   isUser: boolean;
+  isStreaming: boolean;
   onSelectSourcePage?: (source: SelectedSourcePage) => void;
   onImageClick?: (src: string) => void;
 }) {
@@ -412,6 +415,16 @@ function InlineBlock({
             return <TextBubble key={i} text={seg.text} isUser={isUser} onSelectSourcePage={onSelectSourcePage} />;
           }
           if (seg.kind === "artifact_loading") {
+            // If streaming ended but artifact never closed, render what we have
+            if (!isStreaming && seg.partial.length > 50) {
+              return (
+                <InlineArtifact
+                  key={i}
+                  artifact={{ type: seg.type, title: seg.title || "Truncated artifact", content: seg.partial }}
+                  onSelectSourcePage={onSelectSourcePage}
+                />
+              );
+            }
             return (
               <ArtifactLoadingPlaceholder
                 key={i}
@@ -581,14 +594,14 @@ function InlineArtifact({
       {/* Fullscreen modal */}
       {zoomed && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-6"
           onClick={() => setZoomed(false)}
         >
           <div
-            className="relative w-full max-w-6xl max-h-[94vh] flex flex-col rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl border border-gray-200 dark:border-neutral-700 overflow-hidden"
+            className="relative w-full max-w-5xl h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl border border-gray-200 dark:border-neutral-700 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-700 px-6 py-3 shrink-0">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-700 px-4 sm:px-6 py-3 shrink-0">
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-neutral-100 truncate">{title}</h3>
                 <p className="text-xs text-gray-400 dark:text-neutral-500 uppercase">{type}</p>
@@ -600,7 +613,7 @@ function InlineArtifact({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-auto min-h-0 bg-gray-50 dark:bg-neutral-950 [&_iframe]:!min-h-[60vh]">
+            <div className="flex-1 min-h-0 bg-gray-50 dark:bg-neutral-950 [&>div]:h-full [&>div]:!rounded-none [&>div]:!border-0 [&_iframe]:!h-full">
               {renderContent()}
             </div>
           </div>

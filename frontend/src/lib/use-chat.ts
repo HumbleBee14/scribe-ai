@@ -28,11 +28,14 @@ function loadMessages(conversationId: string): ChatMessage[] {
     if (!raw) return [];
     const messages = JSON.parse(raw) as ChatMessage[];
     // Clean up: ensure no message is stuck in streaming state,
-    // and strip unclosed <artifact> tags from interrupted responses
+    // and auto-close unclosed <artifact> tags from interrupted responses
     return messages.map((m) => ({
       ...m,
       isStreaming: false,
-      content: m.content?.replace(/<artifact\s+[^>]*>(?![\s\S]*<\/artifact>)[\s\S]*$/g, "") ?? "",
+      content: m.content?.replace(
+        /(<artifact\s+[^>]*>)((?![\s\S]*<\/artifact>)[\s\S]*)$/g,
+        "$1$2</artifact>"
+      ) ?? "",
     }));
   } catch {
     return [];

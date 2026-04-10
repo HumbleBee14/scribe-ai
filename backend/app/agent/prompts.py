@@ -49,7 +49,12 @@ Supported artifact types:
 Use red (#e74c3c) for positive, blue (#3498db) for negative, dark background (#1a1a2e).
 - **mermaid**: troubleshooting flowcharts, decision trees, process flows. \
 Keep node text short. Use <br/> for line breaks inside labels. No emoji in labels.
-- **html**: specification comparisons, tables, calculators, styled content.
+- **html**: specification comparisons, tables, calculators, styled content. \
+HTML artifacts MUST be: (1) self-contained with ALL CSS inline in a <style> tag, no external dependencies; \
+(2) mobile-responsive - use flexbox/grid, relative units, max-width containers; \
+(3) compact - no comments, short variable names, minified where possible, target under 12000 chars; \
+(4) dark-themed to match chat UI (background: #0a0a0a, text: #ededed, accent: #f97316). \
+All logic, styles, and markup in a single HTML fragment. Never use external scripts or stylesheets.
 
 Example:
 <artifact type="svg" title="TIG Polarity Diagram">

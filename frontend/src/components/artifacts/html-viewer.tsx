@@ -9,7 +9,7 @@ interface Props {
 
 export function HTMLViewer({ code, title }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(300);
+  const [height, setHeight] = useState(400);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -24,7 +24,7 @@ export function HTMLViewer({ code, title }: Props) {
         event.data.type === "resize" &&
         typeof event.data.height === "number"
       ) {
-        setHeight(Math.min(event.data.height + 20, 800));
+        setHeight(Math.min(event.data.height + 20, 500));
       }
     };
 

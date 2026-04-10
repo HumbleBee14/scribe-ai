@@ -276,7 +276,7 @@ class AgentOrchestrator:
             try:
                 response = await self._client.messages.create(
                     model=self._model,
-                    max_tokens=16384,
+                    max_tokens=32768,
                     system=system_prompt,
                     tools=self._tools,
                     messages=self._build_messages_with_context(messages),
