@@ -123,6 +123,8 @@ export interface SessionState {
 
 export interface SelectedSourcePage {
   page: number;
+  /** Additional pages to show (for ranges like "pages 35-40"). */
+  pages?: number[];
   title?: string;
   description?: string;
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { streamChat } from "./api";
-import { saveConversation } from "./history";
+import { listConversations, saveConversation } from "./history";
 import type {
   ArtifactEvent,
   ChatMessage,
@@ -94,27 +94,42 @@ export function useChat(conversationId: string) {
 
   // When conversationId changes (history navigation), reload messages
   useEffect(() => {
-    setMessages(loadMessages(conversationId));
+    const loaded = loadMessages(conversationId);
+    setMessages(loaded);
+    prevCountRef.current = loaded.length; // Don't treat loaded messages as "new"
     sessionIdRef.current = conversationId;
     setSession(null);
   }, [conversationId]);
 
+  // Track message count to detect actual new messages vs. loading from storage
+  const prevCountRef = useRef<number>(0);
+
   // Persist messages to localStorage on every change (debounced)
   const persistRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (messages.length === 0) return;
     if (persistRef.current) clearTimeout(persistRef.current);
     persistRef.current = setTimeout(() => {
       persistMessages(conversationId, messages);
-      // Update conversation summary
-      const firstUser = messages.find((m) => m.role === "user");
-      if (firstUser) {
-        saveConversation({
-          id: conversationId,
-          title: firstUser.content.slice(0, 60) || "Image conversation",
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          messageCount: messages.length,
-        });
+
+      // Only update conversation summary when message count actually increased
+      // (not when loading from storage on conversation switch)
+      const isNewMessage = messages.length > prevCountRef.current;
+      prevCountRef.current = messages.length;
+
+      if (isNewMessage) {
+        const firstUser = messages.find((m) => m.role === "user");
+        if (firstUser) {
+          // Preserve existing createdAt if conversation already exists
+          const existing = listConversations().find((c) => c.id === conversationId);
+          saveConversation({
+            id: conversationId,
+            title: firstUser.content.slice(0, 60) || "Image conversation",
+            createdAt: existing?.createdAt ?? Date.now(),
+            updatedAt: Date.now(),
+            messageCount: messages.length,
+          });
+        }
       }
     }, 500);
     return () => {

@@ -1,20 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { MessageSquare, Plus, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MessageSquare, PanelLeftClose, Pencil, PenSquare, Trash2 } from "lucide-react";
 import {
   ConversationSummary,
   deleteConversation,
   listConversations,
+  saveConversation,
 } from "@/lib/history";
 
 interface Props {
   activeId: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;
+  onCollapse: () => void;
 }
 
-export function HistorySidebar({ activeId, onSelect, onNew }: Props) {
+export function HistorySidebar({ activeId, onSelect, onNew, onCollapse }: Props) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
 
   const reload = useCallback(() => {
@@ -25,10 +27,8 @@ export function HistorySidebar({ activeId, onSelect, onNew }: Props) {
     reload();
   }, [activeId, reload]);
 
-  // Refresh when localStorage is updated (new messages saved)
   useEffect(() => {
     window.addEventListener("storage", reload);
-    // Also poll every 3s for same-tab updates (localStorage events don't fire in same tab)
     const interval = setInterval(reload, 3000);
     return () => {
       window.removeEventListener("storage", reload);
@@ -46,16 +46,24 @@ export function HistorySidebar({ activeId, onSelect, onNew }: Props) {
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-800 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-800 px-3 py-2.5">
+        <button
+          onClick={onCollapse}
+          className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 dark:text-neutral-500 hover:bg-gray-100 dark:hover:bg-neutral-800 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
+          title="Hide history"
+        >
+          <PanelLeftClose className="h-4 w-4" />
+        </button>
         <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500">
           History
         </span>
         <button
           onClick={onNew}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 dark:text-neutral-500 hover:bg-gray-100 dark:hover:bg-neutral-800 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/40 transition-colors"
           title="New conversation"
         >
-          <Plus className="h-4 w-4" />
+          <PenSquare className="h-3.5 w-3.5" />
+          New
         </button>
       </div>
 
@@ -69,32 +77,124 @@ export function HistorySidebar({ activeId, onSelect, onNew }: Props) {
           </div>
         ) : (
           conversations.map((conv) => (
-            <div
+            <ConversationRow
               key={conv.id}
-              onClick={() => onSelect(conv.id)}
-              className={`group flex cursor-pointer items-start gap-2 px-3 py-2.5 mx-1 rounded-lg transition-colors ${
-                conv.id === activeId
-                  ? "bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300"
-                  : "text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
-              }`}
-            >
-              <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-50" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-medium">{conv.title}</div>
-                <div className="text-[10px] text-gray-400 dark:text-neutral-500">
-                  {conv.messageCount} {conv.messageCount === 1 ? "message" : "messages"}
-                </div>
-              </div>
-              <button
-                onClick={(e) => handleDelete(e, conv.id)}
-                className="mt-0.5 hidden h-4 w-4 shrink-0 items-center justify-center rounded text-gray-400 hover:text-red-500 dark:text-neutral-500 dark:hover:text-red-400 group-hover:flex"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </div>
+              conv={conv}
+              isActive={conv.id === activeId}
+              onSelect={() => onSelect(conv.id)}
+              onDelete={() => handleDelete({ stopPropagation: () => {} } as React.MouseEvent, conv.id)}
+              onRename={reload}
+            />
           ))
         )}
       </div>
     </aside>
   );
+}
+
+function ConversationRow({
+  conv,
+  isActive,
+  onSelect,
+  onDelete,
+  onRename,
+}: {
+  conv: ConversationSummary;
+  isActive: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+  onRename: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <div
+      onClick={() => !editing && onSelect()}
+      className={`group flex cursor-pointer items-start gap-2 px-3 py-2.5 mx-1 rounded-lg transition-colors ${
+        isActive
+          ? "bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300"
+          : "text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
+      }`}
+    >
+      <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-50" />
+      <div className="min-w-0 flex-1">
+        <EditableTitle conv={conv} editing={editing} onRename={onRename} onEditDone={() => setEditing(false)} />
+        <div className="text-[10px] text-gray-400 dark:text-neutral-500">
+          {conv.messageCount} {conv.messageCount === 1 ? "message" : "messages"}
+        </div>
+      </div>
+      {!editing && (
+        <div className="mt-0.5 hidden shrink-0 items-center gap-1 group-hover:flex">
+          <button
+            onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+            className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:text-gray-600 dark:text-neutral-500 dark:hover:text-neutral-300"
+            title="Rename"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:text-red-500 dark:text-neutral-500 dark:hover:text-red-400"
+            title="Delete"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EditableTitle({
+  conv,
+  editing,
+  onRename,
+  onEditDone,
+}: {
+  conv: ConversationSummary;
+  editing: boolean;
+  onRename: () => void;
+  onEditDone: () => void;
+}) {
+  const [value, setValue] = useState(conv.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      setValue(conv.title);
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 0);
+    }
+  }, [editing, conv.title]);
+
+  const save = () => {
+    const trimmed = value.trim();
+    if (trimmed && trimmed !== conv.title) {
+      saveConversation({ ...conv, title: trimmed });
+      onRename();
+    }
+    onEditDone();
+  };
+
+  if (editing) {
+    return (
+      <div onClick={(e) => e.stopPropagation()}>
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape") onEditDone();
+          }}
+          onBlur={save}
+          className="w-full rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-1.5 py-0.5 text-xs font-medium text-gray-900 dark:text-neutral-100 outline-none focus:border-orange-400"
+        />
+      </div>
+    );
+  }
+
+  return <div className="truncate text-xs font-medium">{conv.title}</div>;
 }

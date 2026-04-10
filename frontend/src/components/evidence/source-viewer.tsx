@@ -54,7 +54,11 @@ export function SourceViewer({ selectedSource, artifacts }: Props) {
 
 function SourceCard({ source }: { source: SelectedSourcePage }) {
   const [modalOpen, setModalOpen] = useState(false);
-  const url = getManualPageImageUrl(source.page);
+
+  // All pages to show (single page or range)
+  const pages = source.pages && source.pages.length > 1
+    ? source.pages
+    : [source.page];
 
   return (
     <>
@@ -65,7 +69,7 @@ function SourceCard({ source }: { source: SelectedSourcePage }) {
               {source.title ?? `Page ${source.page}`}
             </div>
             <div className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
-              Page {source.page}
+              {pages.length > 1 ? `Pages ${pages[0]}-${pages[pages.length - 1]}` : `Page ${source.page}`}
               {source.description ? ` \u00B7 ${source.description}` : ""}
             </div>
           </div>
@@ -79,27 +83,42 @@ function SourceCard({ source }: { source: SelectedSourcePage }) {
           </button>
         </div>
 
-        {/* Thumbnail: click to open preview modal */}
+        {/* Scrollable page thumbnails */}
         <button
           type="button"
           onClick={() => setModalOpen(true)}
           className="mt-3 block w-full"
         >
-          <img
-            src={url}
-            alt={`Page ${source.page}`}
-            className="max-h-80 rounded-lg border border-gray-200 dark:border-neutral-700 hover:opacity-90 transition-opacity"
-            loading="lazy"
-          />
+          <div className={`${pages.length > 1 ? "max-h-60 overflow-y-auto space-y-2 rounded-lg" : ""}`}>
+            {pages.map((p) => (
+              <div key={p} className="relative">
+                {pages.length > 1 && (
+                  <div className="absolute top-1 left-1 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white font-medium">
+                    p.{p}
+                  </div>
+                )}
+                <img
+                  src={getManualPageImageUrl(p)}
+                  alt={`Page ${p}`}
+                  className="w-full rounded-lg border border-gray-200 dark:border-neutral-700 hover:opacity-90 transition-opacity"
+                  loading="lazy"
+                />
+              </div>
+            ))}
+          </div>
         </button>
       </div>
 
-      {/* Preview modal */}
+      {/* Preview modal: scrollable stack of all pages */}
       {modalOpen && (
         <DocumentPreviewModal
           title={source.title ?? `Page ${source.page}`}
-          subtitle={`Page ${source.page}${source.description ? ` \u00B7 ${source.description}` : ""}`}
-          url={url}
+          subtitle={
+            pages.length > 1
+              ? `Pages ${pages[0]}-${pages[pages.length - 1]}${source.description ? ` \u00B7 ${source.description}` : ""}`
+              : `Page ${source.page}${source.description ? ` \u00B7 ${source.description}` : ""}`
+          }
+          pages={pages}
           onClose={() => setModalOpen(false)}
         />
       )}
@@ -116,12 +135,13 @@ function SourceCard({ source }: { source: SelectedSourcePage }) {
 function DocumentPreviewModal({
   title,
   subtitle,
-  url,
+  pages,
   onClose,
 }: {
   title: string;
   subtitle?: string;
-  url: string;
+  /** Page numbers to render. Single page or a range. */
+  pages: number[];
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -131,9 +151,6 @@ function DocumentPreviewModal({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
-
-  // Detect content type for future extensibility
-  const isPdf = url.endsWith(".pdf");
 
   return (
     <div
@@ -162,23 +179,25 @@ function DocumentPreviewModal({
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-auto flex items-center justify-center p-6 bg-gray-50 dark:bg-neutral-950">
-          {isPdf ? (
-            /* PDF: render in iframe (future support) */
-            <iframe
-              src={url}
-              className="w-full h-full min-h-[70vh] rounded-lg border border-gray-200 dark:border-neutral-700"
-              title={title}
-            />
-          ) : (
-            /* Image: render with natural sizing */
-            <img
-              src={url}
-              alt={title}
-              className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-lg"
-            />
-          )}
+        {/* Content: scrollable stack of pages */}
+        <div className="flex-1 overflow-auto p-6 bg-gray-50 dark:bg-neutral-950">
+          <div className={`${pages.length > 1 ? "space-y-4" : "flex items-center justify-center min-h-full"}`}>
+            {pages.map((p) => (
+              <div key={p} className="relative">
+                {pages.length > 1 && (
+                  <div className="sticky top-0 z-10 mb-2 inline-block rounded-full bg-gray-200 dark:bg-neutral-700 px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-neutral-300">
+                    Page {p}
+                  </div>
+                )}
+                <img
+                  src={getManualPageImageUrl(p)}
+                  alt={`Page ${p}`}
+                  className="max-w-full object-contain rounded-lg shadow-lg"
+                  loading="lazy"
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

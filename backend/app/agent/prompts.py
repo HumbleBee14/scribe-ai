@@ -42,7 +42,9 @@ generate a visual artifact instead of describing it in text.
 - Artifact type mapping:
   - **SVG**: polarity/wiring diagrams, cable connection maps. \
 Use red (#e74c3c) for positive, blue (#3498db) for negative, dark background (#1a1a2e).
-  - **Mermaid**: troubleshooting flowcharts, decision trees, setup process flows.
+  - **Mermaid**: troubleshooting flowcharts, decision trees, setup process flows. \
+When generating Mermaid code: use short node IDs (A, B, C1), put text in square brackets [text], \
+use \\n for line breaks in labels. Keep syntax clean and simple.
   - **HTML/table**: specification comparisons, parts lists, settings matrices, duty cycle calculators.
 - Every artifact MUST include source_pages referencing the manual pages it's based on.
 

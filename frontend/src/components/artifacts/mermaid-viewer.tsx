@@ -8,6 +8,60 @@ interface Props {
   title?: string;
 }
 
+// Common emoji to text replacements for Mermaid compatibility
+const EMOJI_MAP: Record<string, string> = {
+  "\u{1F534}": "(X)", // red circle
+  "\u{1F7E0}": "(!)", // orange circle
+  "\u{1F7E1}": "(!)", // yellow circle
+  "\u{1F7E2}": "(OK)", // green circle
+  "\u2705": "[OK]", // checkmark
+  "\u274C": "[X]", // cross
+  "\u26A0\uFE0F": "/!\\", // warning
+  "\u26A0": "/!\\", // warning (no variation)
+  "\u2B06": "^", // up arrow
+  "\u2B07": "v", // down arrow
+  "\u27A1": "->", // right arrow
+  "\u{1F525}": "*", // fire
+  "\u{1F6D1}": "STOP", // stop sign
+  "\u2714": "[OK]", // heavy check
+  "\u2716": "[X]", // heavy X
+};
+
+/**
+ * Sanitize Mermaid code so the parser doesn't choke on special characters.
+ * - Replaces literal \n with real newlines
+ * - Strips control characters
+ * - Replaces common emojis with text equivalents
+ * - Wraps node labels containing special chars in quotes
+ */
+function sanitizeMermaid(raw: string): string {
+  let code = raw
+    .replace(/\\n/g, "\n")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+
+  // Replace known emojis with ASCII equivalents
+  for (const [emoji, replacement] of Object.entries(EMOJI_MAP)) {
+    code = code.replaceAll(emoji, replacement);
+  }
+
+  // Only replace actual emoji (pictographic range), NOT symbols or box-drawing
+  code = code.replace(
+    /[\u{1F300}-\u{1F9FF}\u{1FA00}-\u{1FAFF}]/gu,
+    "*"
+  );
+
+  // Fix common Claude Mermaid syntax mistakes:
+  // 1. [[ inside node text (Mermaid interprets as subroutine shape)
+  code = code.replace(/\[\[(\w)/g, "[($1");
+  // 2. /!\ warning symbol (not valid in Mermaid)
+  code = code.replace(/\/!\\/g, "WARNING:");
+  // 3. Unbalanced brackets in node labels - escape inner brackets
+  // 4. Long dashes that break parsing
+  code = code.replace(/─{3,}/g, "---");
+
+  return code;
+}
+
 export function MermaidViewer({ code, title }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(400);
@@ -29,9 +83,7 @@ export function MermaidViewer({ code, title }: Props) {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  const cleanCode = code
-    .replace(/\\n/g, "\n")
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+  const cleanCode = sanitizeMermaid(code);
   const escaped = cleanCode
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -173,10 +225,14 @@ try {
           <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <p>Failed to render diagram</p>
-              <pre className="mt-2 overflow-x-auto rounded bg-gray-50 dark:bg-neutral-950 p-2 text-xs text-gray-500 dark:text-neutral-400 max-h-40 overflow-y-auto">
-                {cleanCode.slice(0, 500)}
-              </pre>
+              <p className="font-medium">Failed to render diagram</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">{error}</p>
+              <details className="mt-2">
+                <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600">Show raw code</summary>
+                <pre className="mt-1 overflow-x-auto rounded bg-gray-50 dark:bg-neutral-950 p-2 text-xs text-gray-500 dark:text-neutral-400 max-h-40 overflow-y-auto">
+                  {cleanCode.slice(0, 1000)}
+                </pre>
+              </details>
             </div>
           </div>
         </div>

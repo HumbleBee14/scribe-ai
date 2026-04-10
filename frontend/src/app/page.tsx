@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { PanelLeftOpen } from "lucide-react";
 import { useChat } from "@/lib/use-chat";
 import { ChatInput } from "@/components/chat/chat-input";
 import { MessageBubble } from "@/components/chat/message-bubble";
@@ -14,6 +15,7 @@ import type { SelectedSourcePage } from "@/types/events";
 export default function Home() {
   const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
   const [selectedSource, setSelectedSource] = useState<SelectedSourcePage | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // useChat now owns persistence and restoration keyed by conversationId
@@ -48,18 +50,30 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-neutral-950">
-      {/* Left: History sidebar */}
-      <HistorySidebar
-        activeId={conversationId}
-        onSelect={handleSelectHistory}
-        onNew={handleNew}
-      />
+      {/* Left: History sidebar (collapsible) */}
+      {historyOpen && (
+        <HistorySidebar
+          activeId={conversationId}
+          onSelect={handleSelectHistory}
+          onNew={handleNew}
+          onCollapse={() => setHistoryOpen(false)}
+        />
+      )}
 
       {/* Center: Chat */}
       <div className="flex flex-1 flex-col min-w-0">
         {/* Header */}
         <header className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-5 py-3 shrink-0">
           <div className="flex items-center gap-3">
+            {!historyOpen && (
+              <button
+                onClick={() => setHistoryOpen(true)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-neutral-100 transition-colors"
+                title="Show history"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+            )}
             <span className="text-lg">&#x1F525;</span>
             <div>
               <h1 className="text-sm font-semibold text-gray-900 dark:text-neutral-100">
@@ -78,7 +92,7 @@ export default function Home() {
           {messages.length === 0 ? (
             <WelcomeScreen onQuickAction={(msg) => handleSend(msg)} />
           ) : (
-            <div className="space-y-6 px-6 py-4 max-w-3xl mx-auto">
+            <div className="space-y-6 px-6 py-4 max-w-5xl mx-auto">
               {messages.map((msg) => (
                 <MessageBubble
                   key={msg.id}
@@ -94,7 +108,7 @@ export default function Home() {
 
         {/* Input */}
         <div className="border-t border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-5xl mx-auto">
             <ChatInput
               onSend={handleSend}
               onStop={stopStreaming}

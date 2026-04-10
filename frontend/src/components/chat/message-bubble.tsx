@@ -6,8 +6,10 @@ import remarkGfm from "remark-gfm";
 import {
   AlertTriangle,
   Bot,
+  Check,
   CheckCircle,
   ChevronDown,
+  Copy,
   ExternalLink,
   ImageIcon,
   Loader2,
@@ -41,14 +43,24 @@ function linkifyPageRefs(
       if (match.index > lastIdx) {
         parts.push(text.slice(lastIdx, match.index));
       }
-      const page = parseInt(match[1], 10);
+      const startPage = parseInt(match[1], 10);
+      const endPage = match[2] ? parseInt(match[2], 10) : startPage;
       const fullMatch = match[0];
-      if (page >= 1) {
+      if (startPage >= 1) {
+        // Build array of all pages in range
+        const allPages: number[] = [];
+        for (let p = startPage; p <= Math.min(endPage, startPage + 20); p++) {
+          allPages.push(p);
+        }
         parts.push(
           <button
             key={`pref-${match.index}`}
             type="button"
-            onClick={() => onSelect({ page, title: `Page ${page}` })}
+            onClick={() => onSelect({
+              page: startPage,
+              pages: allPages.length > 1 ? allPages : undefined,
+              title: allPages.length > 1 ? `Pages ${startPage}-${endPage}` : `Page ${startPage}`,
+            })}
             className="inline text-orange-500 hover:text-orange-600 underline underline-offset-2 cursor-pointer"
           >
             {fullMatch}
@@ -91,6 +103,15 @@ export function MessageBubble({
 }: Props) {
   const isUser = message.role === "user";
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard not available */ }
+  };
 
   useEffect(() => {
     if (!lightboxSrc) return;
@@ -102,7 +123,7 @@ export function MessageBubble({
   }, [lightboxSrc]);
 
   return (
-    <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
+    <div className={`group/msg flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
       {/* Avatar */}
       <div
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
@@ -117,7 +138,7 @@ export function MessageBubble({
       </div>
 
       {/* Content */}
-      <div className={`flex max-w-[80%] flex-col gap-2 ${isUser ? "items-end" : ""}`}>
+      <div className={`flex max-w-[75%] flex-col gap-2 ${isUser ? "items-end" : ""}`}>
         {/* Uploaded user images: compact inline row, click to expand */}
         {message.images && message.images.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -266,6 +287,17 @@ export function MessageBubble({
           </div>
         )}
       </div>
+
+      {/* Copy button: right side for assistant, left side for user (flex-row-reverse) */}
+      {message.content && !message.isStreaming && (
+        <button
+          onClick={handleCopy}
+          className="mt-1 hidden group-hover/msg:flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-300 dark:text-neutral-600 hover:text-gray-500 dark:hover:text-neutral-400 transition-colors"
+          title="Copy"
+        >
+          {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      )}
     </div>
   );
 }
