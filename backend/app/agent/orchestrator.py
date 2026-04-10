@@ -40,7 +40,7 @@ _TOOL_LABELS: dict[str, str] = {
 
 
 def _strip_mcp_prefix(tool_name: str) -> str:
-    """Remove MCP server prefix: mcp__welding-knowledge__X -> X"""
+    """Remove MCP server prefix: mcp__product-knowledge__X -> X"""
     prefix = f"mcp__{MCP_SERVER_NAME}__"
     if tool_name.startswith(prefix):
         return tool_name[len(prefix):]

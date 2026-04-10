@@ -16,7 +16,7 @@ from app.agent.tools import execute_tool
 
 logger = logging.getLogger(__name__)
 
-MCP_SERVER_NAME = "welding-knowledge"
+MCP_SERVER_NAME = "product-knowledge"
 
 
 def _mcp_result(data: Any) -> dict[str, Any]:
@@ -299,7 +299,7 @@ ALL_MCP_TOOLS = [
 
 
 def create_knowledge_mcp_server():
-    """Create the MCP server with all active welding knowledge tools."""
+    """Create the MCP server with all active product knowledge tools."""
     return create_sdk_mcp_server(
         name=MCP_SERVER_NAME,
         tools=ALL_MCP_TOOLS,

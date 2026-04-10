@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, LibraryBig, Loader2, PanelLeftOpen } from "lucide-react";
-import { fetchProducts, getProductIngestionStatus, ProductSummary } from "@/lib/api";
+import {
+  BACKEND_URL,
+  fetchProducts,
+  getProductIngestionStatus,
+  ProductSummary,
+} from "@/lib/api";
 import { listConversations } from "@/lib/history";
 import { useChat } from "@/lib/use-chat";
 import { extractArtifactsFromMessages } from "@/lib/artifacts";
@@ -29,6 +34,8 @@ export function ProductWorkspace({ initialProductId }: Props) {
   const [selectedSource, setSelectedSource] = useState<SelectedSourcePage | null>(null);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
+  const [productsLoadError, setProductsLoadError] = useState<string | null>(null);
+  const [productsLoading, setProductsLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const activeProduct = useMemo(
@@ -42,12 +49,26 @@ export function ProductWorkspace({ initialProductId }: Props) {
   const artifacts = useMemo(() => extractArtifactsFromMessages(messages), [messages]);
 
   const loadProducts = useCallback(async () => {
-    const data = await fetchProducts();
-    setProducts(data.products);
-    setActiveProductId((current) => {
-      if (data.products.some((product) => product.id === current)) return current;
-      return data.default_product_id;
-    });
+    setProductsLoading(true);
+    setProductsLoadError(null);
+    try {
+      const data = await fetchProducts();
+      setProducts(data.products);
+      setActiveProductId((current) => {
+        if (data.products.some((product) => product.id === current)) return current;
+        return data.default_product_id;
+      });
+    } catch (e) {
+      const msg =
+        e instanceof TypeError && e.message === "Failed to fetch"
+          ? `Could not reach the API at ${BACKEND_URL}. Start the backend or set NEXT_PUBLIC_BACKEND_URL.`
+          : e instanceof Error
+            ? e.message
+            : "Could not load products.";
+      setProductsLoadError(msg);
+    } finally {
+      setProductsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -119,11 +140,40 @@ export function ProductWorkspace({ initialProductId }: Props) {
     isStreaming || !activeProduct || activeProduct.ingestion.status !== "ready";
 
   if (!activeProduct) {
+    if (productsLoadError) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50 px-6 dark:bg-neutral-950">
+          <div className="max-w-lg rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+            <p className="font-medium">Backend unreachable</p>
+            <p className="mt-2">{productsLoadError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadProducts()}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          >
+            Retry
+          </button>
+          <Link
+            href="/"
+            className="text-sm text-orange-600 hover:underline dark:text-orange-400"
+          >
+            Back to products
+          </Link>
+        </div>
+      );
+    }
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-neutral-950">
         <div className="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-neutral-400">
-          <Loader2 suppressHydrationWarning className="h-4 w-4 animate-spin" />
-          Loading product workspace...
+          {productsLoading ? (
+            <>
+              <Loader2 suppressHydrationWarning className="h-4 w-4 animate-spin" />
+              Loading product workspace...
+            </>
+          ) : (
+            "No matching product. Go back and pick one from the list."
+          )}
         </div>
       </div>
     );

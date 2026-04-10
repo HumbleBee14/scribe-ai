@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight, FileText, Loader2, Plus } from "lucide-react";
-import { fetchProducts, ProductSummary } from "@/lib/api";
+import { BACKEND_URL, fetchProducts, ProductSummary } from "@/lib/api";
 import { CreateProductDialog } from "@/components/products/create-product-dialog";
+
+/** Stable default so `useEffect` deps are not a new `[]` every render (that caused infinite /api/products). */
+const EMPTY_PRODUCTS: ProductSummary[] = [];
 
 interface Props {
   initialProducts?: ProductSummary[];
@@ -12,33 +15,41 @@ interface Props {
 }
 
 export function ProductDashboard({
-  initialProducts = [],
+  initialProducts = EMPTY_PRODUCTS,
   initialDefaultProductId = "",
 }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [items, setItems] = useState(initialProducts);
   const [defaultProductId, setDefaultProductId] = useState(initialDefaultProductId);
   const [isLoading, setIsLoading] = useState(initialProducts.length === 0);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const formatLoadError = useCallback((e: unknown) => {
+    if (e instanceof TypeError && e.message === "Failed to fetch") {
+      return `Could not reach the API at ${BACKEND_URL}. Start the backend (e.g. uvicorn) or set NEXT_PUBLIC_BACKEND_URL if it runs elsewhere.`;
+    }
+    if (e instanceof Error) return e.message;
+    return "Could not load products.";
+  }, []);
+
+  const reloadProducts = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const data = await fetchProducts();
+      setItems(data.products);
+      setDefaultProductId(data.default_product_id);
+    } catch (e) {
+      setLoadError(formatLoadError(e));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [formatLoadError]);
 
   useEffect(() => {
     if (initialProducts.length > 0) return;
-    let cancelled = false;
-    const load = async () => {
-      setIsLoading(true);
-      try {
-        const data = await fetchProducts();
-        if (cancelled) return;
-        setItems(data.products);
-        setDefaultProductId(data.default_product_id);
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [initialProducts]);
+    void reloadProducts();
+  }, [initialProducts.length, reloadProducts]);
 
   const sortedProducts = useMemo(
     () =>
@@ -77,11 +88,29 @@ export function ProductDashboard({
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {loadError && (
+            <div className="md:col-span-2 xl:col-span-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+              <p className="font-medium">Backend unreachable</p>
+              <p className="mt-2 text-red-700/90 dark:text-red-300/90">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => void reloadProducts()}
+                className="mt-3 rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-700"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           {isLoading && (
             <div className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading products...
             </div>
+          )}
+          {!isLoading && !loadError && sortedProducts.length === 0 && (
+            <p className="text-sm text-gray-500 dark:text-neutral-400">
+              No products yet. Use Add product to create one.
+            </p>
           )}
           {sortedProducts.map((product) => (
             <Link

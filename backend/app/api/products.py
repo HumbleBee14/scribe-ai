@@ -203,6 +203,14 @@ def get_ingestion_status(product_id: str) -> dict[str, object]:
     }
 
 
+def _safe_resolve(base: Path, *parts: str) -> Path:
+    """Resolve a path and ensure it stays inside the base directory."""
+    resolved = (base / Path(*parts).name if len(parts) == 1 else base.joinpath(*parts)).resolve()
+    if not str(resolved).startswith(str(base.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    return resolved
+
+
 @router.get("/{product_id}/assets/pages/{source_id}/{filename}")
 def get_page_asset(product_id: str, source_id: str, filename: str) -> FileResponse:
     registry = get_product_registry()
@@ -211,9 +219,13 @@ def get_page_asset(product_id: str, source_id: str, filename: str) -> FileRespon
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    path = runtime.pages_dir / source_id / Path(filename).name
-    if not path.exists() and source_id == (runtime.primary_source_id or ""):
-        legacy_path = runtime.pages_dir / Path(filename).name
+    safe_name = Path(filename).name
+    safe_source = Path(source_id).name  # strip traversal from source_id
+    path = (runtime.pages_dir / safe_source / safe_name).resolve()
+    if not str(path).startswith(str(runtime.pages_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not path.exists() and safe_source == (runtime.primary_source_id or ""):
+        legacy_path = runtime.pages_dir / safe_name
         if legacy_path.exists():
             path = legacy_path
     if not path.exists():
@@ -229,7 +241,9 @@ def get_figure_asset(product_id: str, filename: str) -> FileResponse:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    path = runtime.figures_dir / Path(filename).name
+    path = (runtime.figures_dir / Path(filename).name).resolve()
+    if not str(path).startswith(str(runtime.figures_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid path")
     if not path.exists():
         raise HTTPException(status_code=404, detail="Figure not found")
     return FileResponse(path)

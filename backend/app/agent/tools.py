@@ -474,8 +474,8 @@ def _finalize_tool_result(name: str, result: dict) -> dict:
 
 
 @lru_cache(maxsize=256)
-def _execute_cached(name: str, params_json: str) -> str:
-    """Cached wrapper — key is (tool_name, sorted_json_params)."""
+def _execute_cached(product_id: str, name: str, params_json: str) -> str:
+    """Cached wrapper -- key includes product_id to prevent cross-product leaks."""
     params = json.loads(params_json)
     result = _execute_uncached(name, params)
     return json.dumps(result)
@@ -488,6 +488,7 @@ def execute_tool(name: str, params: dict) -> dict:
     if name in non_cacheable:
         return _finalize_tool_result(name, _execute_uncached(name, params))
 
+    product_id = getattr(get_active_product(), "id", "default")
     params_json = json.dumps(params, sort_keys=True)
-    result_json = _execute_cached(name, params_json)
+    result_json = _execute_cached(product_id, name, params_json)
     return _finalize_tool_result(name, json.loads(result_json))
