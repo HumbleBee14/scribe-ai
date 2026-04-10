@@ -1,8 +1,25 @@
 @import "tailwindcss";
 
+/* Light theme is default */
 :root {
+  --background: #f9fafb;
+  --foreground: #111827;
+  --surface: #ffffff;
+  --surface-2: #f3f4f6;
+  --border: #e5e7eb;
+  --muted: #6b7280;
+  --accent: #f97316;
+  --accent-hover: #ea580c;
+}
+
+/* Dark theme (opt-in via class) */
+.dark {
   --background: #0a0a0a;
   --foreground: #ededed;
+  --surface: #111111;
+  --surface-2: #1a1a1a;
+  --border: #2d2d2d;
+  --muted: #737373;
 }
 
 @theme inline {
@@ -18,33 +35,22 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
-/* Scrollbar styling for dark mode */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #1a1a1a;
-}
-::-webkit-scrollbar-thumb {
-  background: #404040;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--surface-2); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
-/* Markdown prose in dark mode */
-.prose-invert a {
-  color: #f97316;
-}
-.prose-invert code {
-  background: #1a1a1a;
+/* Markdown prose */
+.prose a { color: var(--accent); }
+.prose code {
+  background: var(--surface-2);
   padding: 0.15em 0.3em;
   border-radius: 0.25em;
   font-size: 0.875em;
 }
-.prose-invert pre {
-  background: #111;
-  border: 1px solid #333;
+.prose pre {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 0.5em;
 }

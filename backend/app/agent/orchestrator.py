@@ -89,6 +89,14 @@ class AgentOrchestrator:
         images: list[dict[str, str]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Run the agent and yield SSE events for the frontend."""
+        # Images go directly to the Anthropic client loop.
+        # The Agent SDK subprocess transport does not handle large base64
+        # payloads reliably and will hang without error.
+        if images:
+            async for event in self._run_with_anthropic_loop(user_message, session, images):
+                yield event
+            return
+
         if self._should_use_agent_sdk():
             logger.warning(
                 "[agent-runtime] request started via Claude Agent SDK (session=%s)",

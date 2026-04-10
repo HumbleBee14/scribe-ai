@@ -23,12 +23,14 @@ export interface ChatRequestPayload {
  * Yields parsed { event, data } objects as they arrive.
  */
 export async function* streamChat(
-  payload: ChatRequestPayload
+  payload: ChatRequestPayload,
+  signal?: AbortSignal,
 ): AsyncGenerator<{ event: string; data: Record<string, unknown> }> {
   const response = await fetch(buildBackendUrl("/api/chat/stream"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal,
   });
 
   if (!response.ok) {

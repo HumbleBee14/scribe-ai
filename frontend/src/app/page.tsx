@@ -11,7 +11,7 @@ import { SourceViewer } from "@/components/evidence/source-viewer";
 import type { SelectedSourcePage } from "@/types/events";
 
 export default function Home() {
-  const { messages, isStreaming, session, sendMessage, clearMessages } =
+  const { messages, isStreaming, session, sendMessage, stopStreaming, clearMessages } =
     useChat();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [selectedSource, setSelectedSource] = useState<SelectedSourcePage | null>(
@@ -86,7 +86,12 @@ export default function Home() {
         </div>
 
         {/* Input */}
-        <ChatInput onSend={handleSend} disabled={isStreaming} />
+        <ChatInput
+          onSend={handleSend}
+          onStop={stopStreaming}
+          isStreaming={isStreaming}
+          disabled={isStreaming}
+        />
       </div>
 
       {/* Right sidebar (session context + future artifact panel) */}
