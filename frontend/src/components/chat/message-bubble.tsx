@@ -319,7 +319,7 @@ interface ParsedArtifact {
 type TextSegment =
   | { kind: "text"; text: string }
   | { kind: "artifact"; artifact: ParsedArtifact }
-  | { kind: "artifact_loading"; type: string; title: string };
+  | { kind: "artifact_loading"; type: string; title: string; partial: string };
 
 const ARTIFACT_REGEX = /<artifact\s+type="([^"]*)"(?:\s+title="([^"]*)")?[^>]*>([\s\S]*?)<\/artifact>/g;
 const ARTIFACT_OPEN_REGEX = /<artifact\s+type="([^"]*)"(?:\s+title="([^"]*)")?[^>]*>/;
@@ -352,11 +352,14 @@ function parseArtifactTags(text: string): TextSegment[] {
         // Text before the open tag
         const beforeOpen = remaining.slice(0, openMatch.index).trim();
         if (beforeOpen) segments.push({ kind: "text", text: beforeOpen });
-        // Show loading placeholder for the streaming artifact
+        // Capture partial content after the opening tag
+        const tagEnd = (openMatch.index ?? 0) + openMatch[0].length;
+        const partial = remaining.slice(tagEnd).trim();
         segments.push({
           kind: "artifact_loading",
           type: openMatch[1] || "",
           title: openMatch[2] || "",
+          partial,
         });
       } else {
         segments.push({ kind: "text", text: remaining });
@@ -410,17 +413,12 @@ function InlineBlock({
           }
           if (seg.kind === "artifact_loading") {
             return (
-              <div key={i} className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 p-6 flex items-center gap-3">
-                <Loader2 className="h-5 w-5 animate-spin text-orange-400" />
-                <div>
-                  <div className="text-sm font-medium text-gray-700 dark:text-neutral-300">
-                    Generating {seg.title || seg.type || "artifact"}...
-                  </div>
-                  <div className="text-xs text-gray-400 dark:text-neutral-500 mt-0.5">
-                    {seg.type.toUpperCase()}
-                  </div>
-                </div>
-              </div>
+              <ArtifactLoadingPlaceholder
+                key={i}
+                type={seg.type}
+                title={seg.title}
+                partial={seg.partial}
+              />
             );
           }
           return (
@@ -490,6 +488,51 @@ function TextBubble({
 }
 
 /** Renders an inline artifact (parsed from <artifact> tags in text). */
+function ArtifactLoadingPlaceholder({
+  type,
+  title,
+  partial,
+}: {
+  type: string;
+  title: string;
+  partial: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const charCount = partial.length;
+
+  return (
+    <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 p-4 my-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Loader2 className="h-5 w-5 animate-spin text-orange-400 shrink-0" />
+          <div>
+            <div className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+              Generating {title || type || "artifact"}...
+            </div>
+            <div className="text-xs text-gray-400 dark:text-neutral-500 mt-0.5">
+              {type.toUpperCase()}{charCount > 0 ? ` \u00B7 ${charCount} chars received` : ""}
+            </div>
+          </div>
+        </div>
+        {charCount > 0 && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-xs text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 flex items-center gap-1"
+          >
+            <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
+            {expanded ? "Hide" : "Show"} stream
+          </button>
+        )}
+      </div>
+      {expanded && partial && (
+        <pre className="mt-3 max-h-60 overflow-auto rounded-lg bg-gray-100 dark:bg-neutral-950 p-3 text-xs text-gray-600 dark:text-neutral-400 font-mono whitespace-pre-wrap break-all">
+          {partial}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function InlineArtifact({
   artifact,
   onSelectSourcePage,
