@@ -249,6 +249,11 @@ export function MessageBubble({
           </div>
         )}
 
+        {/* Clickable follow-up suggestions (extracted from assistant text) */}
+        {!isUser && !message.isStreaming && message.content && (
+          <FollowUpSuggestions text={message.content} onSelect={onQuickReply} />
+        )}
+
         {/* Generating indicator: at the bottom, while agent is still working */}
         {message.isStreaming && (
           <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-neutral-500 py-1">
@@ -281,6 +286,9 @@ function InlineBlock({
   onImageClick?: (src: string) => void;
 }) {
   if (block.type === "text" && block.text.trim()) {
+    // Strip the ```followups``` code block from displayed text
+    const displayText = stripFollowupsBlock(block.text);
+    if (!displayText.trim()) return null;
     return (
       <div
         className={`rounded-2xl px-4 py-3 ${
@@ -293,14 +301,13 @@ function InlineBlock({
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              // Auto-link page references in text nodes
               p: ({ children }) => <p>{linkifyPageRefs(children, onSelectSourcePage)}</p>,
               li: ({ children }) => <li>{linkifyPageRefs(children, onSelectSourcePage)}</li>,
               strong: ({ children }) => <strong>{linkifyPageRefs(children, onSelectSourcePage)}</strong>,
               em: ({ children }) => <em>{linkifyPageRefs(children, onSelectSourcePage)}</em>,
             }}
           >
-            {block.text}
+            {displayText}
           </ReactMarkdown>
         </div>
       </div>
@@ -359,6 +366,59 @@ function PageImageBlock({
           loading="lazy"
         />
       </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Follow-up extraction: parse ```followups``` code blocks from Claude's response
+// This is reliable because the format is a fenced code block, not free-form text.
+// ---------------------------------------------------------------------------
+
+const FOLLOWUPS_BLOCK_REGEX = /```followups\n([\s\S]*?)```/gi;
+
+function extractFollowUps(text: string): string[] {
+  const questions: string[] = [];
+  let match: RegExpExecArray | null;
+  const regex = new RegExp(FOLLOWUPS_BLOCK_REGEX.source, "g");
+  while ((match = regex.exec(text)) !== null) {
+    const block = match[1];
+    for (const line of block.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed.length > 5) {
+        questions.push(trimmed);
+      }
+    }
+  }
+  return questions;
+}
+
+function stripFollowupsBlock(text: string): string {
+  return text.replace(/```followups\n[\s\S]*?```/gi, "").trim();
+}
+
+function FollowUpSuggestions({
+  text,
+  onSelect,
+}: {
+  text: string;
+  onSelect?: (message: string) => void;
+}) {
+  const followUps = useMemo(() => extractFollowUps(text), [text]);
+  if (followUps.length === 0 || !onSelect) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2 pt-1">
+      {followUps.map((q, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => onSelect(q)}
+          className="rounded-full border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-3 py-1.5 text-xs text-gray-600 dark:text-neutral-300 hover:border-orange-300 dark:hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-300 transition-colors text-left"
+        >
+          {q}
+        </button>
+      ))}
     </div>
   );
 }
