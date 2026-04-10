@@ -22,7 +22,7 @@ from claude_agent_sdk import (
     query,
 )
 
-from app.agent.prompts import build_system_prompt
+from app.agent.prompts import build_system_prompt, build_system_prompt_blocks
 from app.agent.tools import execute_tool, get_active_tools
 from app.agent.tools_mcp import MCP_SERVER_NAME, create_knowledge_mcp_server
 from app.core.config import FILES_DIR, settings
@@ -270,15 +270,22 @@ class AgentOrchestrator:
             {"role": "user", "content": content},
         ]
 
-        system_prompt = build_system_prompt(session.context_summary())
+        # Static prompt + tools are cached; dynamic session context is separate
+        system_blocks = build_system_prompt_blocks(session.context_summary())
+        cached_tools = self._tools.copy()
+        if cached_tools:
+            cached_tools[-1] = {
+                **cached_tools[-1],
+                "cache_control": {"type": "ephemeral"},
+            }
 
         for turn in range(MAX_TOOL_TURNS):
             try:
                 response = await self._client.messages.create(
                     model=self._model,
                     max_tokens=32768,
-                    system=system_prompt,
-                    tools=self._tools,
+                    system=system_blocks,
+                    tools=cached_tools,
                     messages=self._build_messages_with_context(messages),
                 )
             except anthropic.APIError as exc:
