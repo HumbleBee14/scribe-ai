@@ -33,7 +33,7 @@ export function MessageBubble({
       {/* Avatar */}
       <div
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-          isUser ? "bg-orange-600" : "bg-neutral-700"
+          isUser ? "bg-orange-500" : "bg-gray-200 dark:bg-neutral-700"
         }`}
       >
         {isUser ? (
@@ -51,7 +51,7 @@ export function MessageBubble({
             key={`${message.id}-upload-${i}`}
             src={`data:${img.mediaType};base64,${img.data}`}
             alt={`Uploaded reference ${i + 1}`}
-            className="max-h-48 rounded-xl border border-neutral-700 object-cover"
+            className="max-h-48 rounded-xl border border-gray-200 dark:border-neutral-700 object-cover"
             loading="lazy"
           />
         ))}
@@ -62,8 +62,8 @@ export function MessageBubble({
             key={i}
             className={`flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${
               warning.level === "danger"
-                ? "bg-red-950 border border-red-800 text-red-200"
-                : "bg-yellow-950 border border-yellow-800 text-yellow-200"
+                ? "bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200"
+                : "bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-200"
             }`}
           >
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
@@ -75,7 +75,7 @@ export function MessageBubble({
         {message.toolCalls?.map((tc, i) => (
           <div
             key={i}
-            className="flex items-center gap-2 text-xs text-neutral-400"
+            className="flex items-center gap-2 text-xs text-gray-400 dark:text-neutral-500"
           >
             {tc.ok === undefined ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -91,11 +91,11 @@ export function MessageBubble({
           <div
             className={`rounded-2xl px-4 py-3 ${
               isUser
-                ? "bg-orange-600 text-white"
-                : "bg-neutral-800 text-neutral-100"
+                ? "bg-orange-500 text-white"
+                : "bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 border border-gray-200 dark:border-neutral-700"
             }`}
           >
-            <div className="prose prose-invert prose-sm max-w-none">
+            <div className={`prose prose-sm max-w-none ${isUser ? "prose-invert" : "dark:prose-invert"}`}>
               <ReactMarkdown>{message.content}</ReactMarkdown>
             </div>
           </div>
@@ -105,9 +105,9 @@ export function MessageBubble({
         {message.pageImages?.map((img, i) => (
           <div
             key={i}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 p-2"
+            className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-2"
           >
-            <div className="mb-1 flex items-center justify-between gap-2 text-xs text-neutral-400">
+            <div className="mb-1 flex items-center justify-between gap-2 text-xs text-gray-400 dark:text-neutral-400">
               <span>Manual Page {img.page}</span>
               <button
                 onClick={() =>
@@ -116,7 +116,7 @@ export function MessageBubble({
                     title: `Manual Page ${img.page}`,
                   })
                 }
-                className="inline-flex items-center gap-1 text-orange-300 hover:text-orange-200"
+                className="inline-flex items-center gap-1 text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300"
               >
                 Open in sidebar
                 <ExternalLink className="h-3 w-3" />
@@ -142,11 +142,11 @@ export function MessageBubble({
 
         {/* Clarification card */}
         {message.clarification && (
-          <div className="rounded-lg border border-blue-800 bg-blue-950 p-3">
+          <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-3">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 text-blue-400 shrink-0" />
+              <AlertTriangle className="mt-0.5 h-4 w-4 text-blue-500 dark:text-blue-400 shrink-0" />
               <div>
-                <p className="text-sm text-blue-200">
+                <p className="text-sm text-blue-700 dark:text-blue-200">
                   {message.clarification.question}
                 </p>
                 {message.clarification.options && (
@@ -155,7 +155,7 @@ export function MessageBubble({
                       <button
                         key={i}
                         onClick={() => onQuickReply?.(opt)}
-                        className="rounded-full bg-blue-900 px-3 py-1 text-xs text-blue-200 hover:bg-blue-800 transition-colors"
+                        className="rounded-full bg-blue-100 dark:bg-blue-900 px-3 py-1 text-xs text-blue-700 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
                       >
                         {opt}
                       </button>
@@ -169,7 +169,7 @@ export function MessageBubble({
 
         {/* Streaming indicator */}
         {message.isStreaming && !message.content && (
-          <div className="flex items-center gap-2 text-sm text-neutral-500">
+          <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-neutral-500">
             <Loader2 className="h-4 w-4 animate-spin" />
             Thinking...
           </div>
@@ -180,7 +180,7 @@ export function MessageBubble({
           !message.artifacts?.length &&
           !message.content &&
           !message.isStreaming && (
-            <div className="flex items-center gap-2 text-xs text-neutral-500">
+            <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-neutral-500">
               <ImageIcon className="h-3.5 w-3.5" />
               No visual sources were returned for this answer.
             </div>
