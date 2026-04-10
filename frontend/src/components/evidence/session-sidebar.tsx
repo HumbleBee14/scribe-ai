@@ -54,9 +54,20 @@ export function SessionSidebar({ session }: Props) {
       <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
         Session Context
       </h3>
+      {session.contextSummary && (
+        <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3">
+          <div className="text-[10px] uppercase text-gray-500 dark:text-neutral-400">
+            Current understanding
+          </div>
+          <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-neutral-300">
+            {session.contextSummary}
+          </p>
+        </div>
+      )}
       {items.map((item) => (
         <div key={item.label} className="flex items-center gap-2">
           <item.icon
+            suppressHydrationWarning
             className={`h-4 w-4 ${
               item.active ? "text-orange-500 dark:text-orange-400" : "text-gray-300 dark:text-neutral-500"
             }`}

@@ -54,7 +54,7 @@ export function WelcomeScreen({ onQuickAction }: Props) {
             onClick={() => onQuickAction(action.message)}
             className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-4 text-sm text-gray-700 dark:text-neutral-200 hover:border-orange-300 dark:hover:border-orange-500 transition-colors"
           >
-            <action.icon className={`h-5 w-5 ${action.color}`} />
+            <action.icon suppressHydrationWarning className={`h-5 w-5 ${action.color}`} />
             <span>{action.label}</span>
           </button>
         ))}

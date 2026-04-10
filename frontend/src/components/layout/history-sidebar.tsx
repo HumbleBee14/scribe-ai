@@ -24,7 +24,8 @@ export function HistorySidebar({ activeId, onSelect, onNew, onCollapse }: Props)
   }, []);
 
   useEffect(() => {
-    reload();
+    const timeoutId = window.setTimeout(reload, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [activeId, reload]);
 
   useEffect(() => {
@@ -36,8 +37,7 @@ export function HistorySidebar({ activeId, onSelect, onNew, onCollapse }: Props)
     };
   }, [reload]);
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+  const handleDelete = (id: string) => {
     deleteConversation(id);
     setConversations(listConversations());
     if (id === activeId) onNew();
@@ -52,7 +52,7 @@ export function HistorySidebar({ activeId, onSelect, onNew, onCollapse }: Props)
           className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
           title="Hide history"
         >
-          <PanelLeftClose className="h-4 w-4" />
+          <PanelLeftClose suppressHydrationWarning className="h-4 w-4" />
         </button>
         <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-400">
           History
@@ -62,7 +62,7 @@ export function HistorySidebar({ activeId, onSelect, onNew, onCollapse }: Props)
           className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/40 transition-colors"
           title="New conversation"
         >
-          <PenSquare className="h-3.5 w-3.5" />
+          <PenSquare suppressHydrationWarning className="h-3.5 w-3.5" />
           New
         </button>
       </div>
@@ -82,7 +82,7 @@ export function HistorySidebar({ activeId, onSelect, onNew, onCollapse }: Props)
               conv={conv}
               isActive={conv.id === activeId}
               onSelect={() => onSelect(conv.id)}
-              onDelete={() => handleDelete({ stopPropagation: () => {} } as React.MouseEvent, conv.id)}
+              onDelete={() => handleDelete(conv.id)}
               onRename={reload}
             />
           ))
@@ -107,6 +107,11 @@ function ConversationRow({
 }) {
   const [editing, setEditing] = useState(false);
 
+  const startEditing = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setEditing(true);
+  };
+
   return (
     <div
       onClick={() => !editing && onSelect()}
@@ -116,7 +121,7 @@ function ConversationRow({
           : "text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
       }`}
     >
-      <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-50" />
+      <MessageSquare suppressHydrationWarning className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-50" />
       <div className="min-w-0 flex-1">
         <EditableTitle conv={conv} editing={editing} onRename={onRename} onEditDone={() => setEditing(false)} />
         <div className="text-[10px] text-gray-400 dark:text-neutral-400">
@@ -126,18 +131,23 @@ function ConversationRow({
       {!editing && (
         <div className="mt-0.5 hidden shrink-0 items-center gap-1 group-hover:flex">
           <button
-            onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+            type="button"
+            onClick={startEditing}
             className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300"
             title="Rename"
           >
-            <Pencil className="h-3 w-3" />
+            <Pencil suppressHydrationWarning className="h-3 w-3" />
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
             className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:text-red-500 dark:text-neutral-400 dark:hover:text-red-400"
             title="Delete"
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 suppressHydrationWarning className="h-3 w-3" />
           </button>
         </div>
       )}
@@ -161,11 +171,12 @@ function EditableTitle({
 
   useEffect(() => {
     if (editing) {
-      setValue(conv.title);
-      setTimeout(() => {
+      const timeoutId = window.setTimeout(() => {
+        setValue(conv.title);
         inputRef.current?.focus();
         inputRef.current?.select();
       }, 0);
+      return () => window.clearTimeout(timeoutId);
     }
   }, [editing, conv.title]);
 

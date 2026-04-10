@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import Image from "next/image";
 import { ImagePlus, Send, Square, X } from "lucide-react";
+import { ImageLightbox } from "@/components/ui/image-lightbox";
 
 interface Props {
   onSend: (
@@ -20,16 +22,6 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
   >([]);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  // Close lightbox on Escape
-  useEffect(() => {
-    if (!lightboxSrc) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setLightboxSrc(null);
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [lightboxSrc]);
 
   const addImageFromFile = useCallback((file: File) => {
     if (!file.type.startsWith("image/")) return;
@@ -99,61 +91,49 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
                 onClick={() => setLightboxSrc(img.preview)}
                 className="block"
               >
-                <img
+                <Image
                   src={img.preview}
                   alt="Upload preview"
+                  unoptimized
+                  width={64}
+                  height={64}
                   className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-neutral-700 hover:opacity-90 transition-opacity"
                 />
               </button>
               {/* Remove button — fully visible, sits outside the image */}
               <button
+                type="button"
                 onClick={() =>
                   setPendingImages((prev) => prev.filter((_, j) => j !== i))
                 }
                 className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white shadow-md hover:bg-red-600 transition-colors"
                 title="Remove image"
               >
-                <X className="h-3 w-3" />
+                <X suppressHydrationWarning className="h-3 w-3" />
               </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Lightbox modal */}
       {lightboxSrc && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setLightboxSrc(null)}
-        >
-          <div
-            className="relative max-h-[90vh] max-w-[90vw]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <img
-              src={lightboxSrc}
-              alt="Preview"
-              className="max-h-[85vh] max-w-[85vw] rounded-xl shadow-2xl object-contain"
-            />
-            <button
-              onClick={() => setLightboxSrc(null)}
-              className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 shadow-lg hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"
-              title="Close (Esc)"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+        <ImageLightbox
+          src={lightboxSrc}
+          alt="Upload preview"
+          title="Upload preview"
+          onClose={() => setLightboxSrc(null)}
+        />
       )}
 
       {/* Input row */}
       <div className="flex items-end gap-2">
         <button
+          type="button"
           onClick={() => fileRef.current?.click()}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-300 dark:border-neutral-500 bg-gray-50 dark:bg-neutral-800 text-gray-500 dark:text-neutral-300 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"
           title="Upload or paste an image (weld photo, machine setup)"
         >
-          <ImagePlus className="h-5 w-5" />
+          <ImagePlus suppressHydrationWarning className="h-5 w-5" />
         </button>
         <input
           ref={fileRef}
@@ -178,19 +158,21 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
         {/* Stop button shown while streaming */}
         {isStreaming ? (
           <button
+            type="button"
             onClick={onStop}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500 text-white hover:bg-red-400 transition-colors"
             title="Stop response"
           >
-            <Square className="h-4 w-4 fill-current" />
+            <Square suppressHydrationWarning className="h-4 w-4 fill-current" />
           </button>
         ) : (
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={!text.trim() && pendingImages.length === 0}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white hover:bg-orange-400 disabled:opacity-40 transition-colors"
           >
-            <Send className="h-5 w-5" />
+            <Send suppressHydrationWarning className="h-5 w-5" />
           </button>
         )}
       </div>

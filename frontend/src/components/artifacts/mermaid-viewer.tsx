@@ -107,7 +107,7 @@ function quoteRectangleContent(line: string): string {
 }
 
 /** Detect if Mermaid code was truncated (incomplete AI output). */
-function detectTruncation(_code: string): boolean {
+function detectTruncation(): boolean {
   // Disabled: let Mermaid try to render and show its own error if invalid.
   // The truncation heuristic had too many false positives.
   return false;
@@ -197,7 +197,7 @@ export function MermaidViewer({ code, title }: Props) {
   const cleanCode = sanitizeMermaid(code);
 
   // Detect truncated code (incomplete AI output)
-  const isTruncated = detectTruncation(cleanCode);
+  const isTruncated = detectTruncation();
 
   const escaped = cleanCode
     .replace(/&/g, "&amp;")
@@ -338,7 +338,7 @@ try {
       {isTruncated ? (
         <div className="p-4">
           <div className="flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <AlertCircle suppressHydrationWarning className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
               <p className="font-medium">Diagram was cut off</p>
               <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
@@ -350,7 +350,7 @@ try {
       ) : error ? (
         <div className="p-4">
           <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <AlertCircle suppressHydrationWarning className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
               <p className="font-medium">Failed to render diagram</p>
               <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">{error}</p>

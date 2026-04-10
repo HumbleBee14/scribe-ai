@@ -18,6 +18,14 @@ export const metadata: Metadata = {
   description: "Multimodal support agent for the Vulcan OmniPro 220 welding system.",
 };
 
+const themeInitScript = `
+  try {
+    const stored = localStorage.getItem("theme");
+    const theme = stored || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  } catch {}
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,8 +35,10 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         {/* Preload Mermaid CDN so iframes render instantly (cached by browser) */}
         <link
           rel="preload"

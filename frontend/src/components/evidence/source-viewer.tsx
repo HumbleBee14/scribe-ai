@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Expand, FileImage, X } from "lucide-react";
+import { useState } from "react";
+import Image from "next/image";
+import { Expand, FileImage } from "lucide-react";
 import { getManualPageImageUrl } from "@/lib/api";
 import { ArtifactModal } from "@/components/artifacts/artifact-modal";
+import { DialogShell } from "@/components/ui/dialog-shell";
 import type { ArtifactEvent, SelectedSourcePage } from "@/types/events";
 
 interface Props {
@@ -79,7 +81,7 @@ function SourceCard({ source }: { source: SelectedSourcePage }) {
             title="Open preview"
           >
             Open
-            <Expand className="h-3 w-3" />
+            <Expand suppressHydrationWarning className="h-3 w-3" />
           </button>
         </div>
 
@@ -97,11 +99,13 @@ function SourceCard({ source }: { source: SelectedSourcePage }) {
                     p.{p}
                   </div>
                 )}
-                <img
+                <Image
                   src={getManualPageImageUrl(p)}
                   alt={`Page ${p}`}
+                  unoptimized
+                  width={1200}
+                  height={1600}
                   className="w-full rounded-lg border border-gray-200 dark:border-neutral-700 hover:opacity-90 transition-opacity"
-                  loading="lazy"
                 />
               </div>
             ))}
@@ -144,63 +148,34 @@ function DocumentPreviewModal({
   pages: number[];
   onClose: () => void;
 }) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6"
-      onClick={onClose}
+    <DialogShell
+      title={title}
+      subtitle={subtitle}
+      onClose={onClose}
+      sizeClassName="max-w-4xl"
+      contentClassName="flex-1 overflow-auto p-6 bg-gray-50 dark:bg-neutral-950"
     >
-      <div
-        className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl border border-gray-200 dark:border-neutral-700 overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-700 px-6 py-3 shrink-0">
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-neutral-100 truncate">
-              {title}
-            </h3>
-            {subtitle && (
-              <p className="text-xs text-gray-400 dark:text-neutral-400 truncate">{subtitle}</p>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Content: scrollable stack of pages */}
-        <div className="flex-1 overflow-auto p-6 bg-gray-50 dark:bg-neutral-950">
-          <div className={`${pages.length > 1 ? "space-y-4" : "flex items-center justify-center min-h-full"}`}>
-            {pages.map((p) => (
-              <div key={p} className="relative">
-                {pages.length > 1 && (
-                  <div className="sticky top-0 z-10 mb-2 inline-block rounded-full bg-gray-200 dark:bg-neutral-700 px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-neutral-300">
-                    Page {p}
-                  </div>
-                )}
-                <img
-                  src={getManualPageImageUrl(p)}
-                  alt={`Page ${p}`}
-                  className="max-w-full object-contain rounded-lg shadow-lg"
-                  loading="lazy"
-                />
+      <div className={`${pages.length > 1 ? "space-y-4" : "flex items-center justify-center min-h-full"}`}>
+        {pages.map((p) => (
+          <div key={p} className="relative">
+            {pages.length > 1 && (
+              <div className="sticky top-0 z-10 mb-2 inline-block rounded-full bg-gray-200 dark:bg-neutral-700 px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-neutral-300">
+                Page {p}
               </div>
-            ))}
+            )}
+            <Image
+              src={getManualPageImageUrl(p)}
+              alt={`Page ${p}`}
+              unoptimized
+              width={1400}
+              height={1800}
+              className="max-w-full object-contain rounded-lg shadow-lg"
+            />
           </div>
-        </div>
+        ))}
       </div>
-    </div>
+    </DialogShell>
   );
 }
 
@@ -222,7 +197,7 @@ function SidebarArtifactList({ artifacts }: { artifacts: ArtifactEvent["data"][]
             className="w-full text-left rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 hover:border-orange-300 dark:hover:border-orange-500 transition-colors cursor-pointer"
           >
             <div className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-neutral-100">
-              <FileImage className="h-4 w-4 text-orange-500 dark:text-orange-400 shrink-0" />
+              <FileImage suppressHydrationWarning className="h-4 w-4 text-orange-500 dark:text-orange-400 shrink-0" />
               <span className="truncate">{artifact.title}</span>
             </div>
             <div className="mt-1 text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-400">

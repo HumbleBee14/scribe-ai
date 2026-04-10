@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { streamChat } from "./api";
 import { listConversations, saveConversation } from "./history";
 import type {
+  ArtifactEvent,
   ChatMessage,
-  DoneEvent,
   ErrorEvent,
   ImageEvent,
   SafetyWarningEvent,
@@ -250,7 +250,13 @@ export function useChat(conversationId: string) {
                   break;
                 }
 
-case "image": {
+                case "artifact": {
+                  const artifactData = data as ArtifactEvent["data"];
+                  msg.blocks = [...(msg.blocks ?? []), { type: "artifact", data: artifactData }];
+                  break;
+                }
+
+                case "image": {
                   const imgData = data as ImageEvent["data"];
                   msg.pageImages = [...(msg.pageImages ?? []), imgData];
                   msg.blocks = [...(msg.blocks ?? []), { type: "image", data: imgData }];
@@ -323,7 +329,7 @@ case "image": {
         setIsStreaming(false);
       }
     },
-    [conversationId]
+    []
   );
 
   const clearMessages = useCallback(() => {

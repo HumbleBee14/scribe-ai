@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
-import { PanelLeftOpen } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LibraryBig, PanelLeftOpen } from "lucide-react";
 import { useChat } from "@/lib/use-chat";
+import { extractArtifactsFromMessages } from "@/lib/artifacts";
 import { ChatInput } from "@/components/chat/chat-input";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { WelcomeScreen } from "@/components/chat/welcome-screen";
 import { SessionSidebar } from "@/components/evidence/session-sidebar";
 import { SourceViewer } from "@/components/evidence/source-viewer";
 import { HistorySidebar } from "@/components/layout/history-sidebar";
+import { MobileContextPanel } from "@/components/layout/mobile-context-panel";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import type { SelectedSourcePage } from "@/types/events";
 
@@ -16,6 +18,7 @@ export default function Home() {
   const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
   const [selectedSource, setSelectedSource] = useState<SelectedSourcePage | null>(null);
   const [historyOpen, setHistoryOpen] = useState(true);
+  const [mobileContextOpen, setMobileContextOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // useChat now owns persistence and restoration keyed by conversationId
@@ -24,8 +27,6 @@ export default function Home() {
 
   const handleSend = (text: string, images?: Array<{ mediaType: string; data: string }>) => {
     sendMessage(text, images);
-    // Scroll after a short delay so the new message is rendered
-    setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   };
 
   const handleNew = useCallback(() => {
@@ -43,24 +44,10 @@ export default function Home() {
     [conversationId]
   );
 
-  const artifacts = useMemo(() => {
-    const regex = /<artifact\s+type="([^"]*)"(?:\s+title="([^"]*)")?[^>]*>([\s\S]*?)<\/artifact>/g;
-    const result: Array<{ id: string; renderer: string; title: string; code: string; source_pages: Array<{ page: number; description: string }> }> = [];
-    for (const m of messages) {
-      if (m.role !== "assistant" || !m.content) continue;
-      const re = new RegExp(regex.source, "g");
-      let match: RegExpExecArray | null;
-      while ((match = re.exec(m.content)) !== null) {
-        result.push({
-          id: `art-${m.id}-${match.index}`,
-          renderer: match[1],
-          title: match[2] || match[1],
-          code: match[3].trim(),
-          source_pages: [],
-        });
-      }
-    }
-    return result;
+  const artifacts = useMemo(() => extractArtifactsFromMessages(messages), [messages]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: messages.length > 1 ? "smooth" : "auto" });
   }, [messages]);
 
   return (
@@ -86,7 +73,7 @@ export default function Home() {
                 className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-neutral-100 transition-colors"
                 title="Show history"
               >
-                <PanelLeftOpen className="h-4 w-4" />
+                <PanelLeftOpen suppressHydrationWarning className="h-4 w-4" />
               </button>
             )}
             <span className="text-lg">&#x1F525;</span>
@@ -99,13 +86,26 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMobileContextOpen(true)}
+              className="flex h-8 items-center gap-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2.5 text-xs text-gray-600 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white transition-colors lg:hidden"
+              title="Open context, sources, and artifacts"
+            >
+              <LibraryBig suppressHydrationWarning className="h-4 w-4" />
+              Context
+            </button>
+            <ThemeToggle />
+          </div>
         </header>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
-            <WelcomeScreen onQuickAction={(msg) => handleSend(msg)} />
+            <div className="flex min-h-full">
+              <WelcomeScreen onQuickAction={(msg) => handleSend(msg)} />
+            </div>
           ) : (
             <div className="space-y-6 px-6 py-4 max-w-6xl mx-auto">
               {messages.map((msg) => (
@@ -133,6 +133,14 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      <MobileContextPanel
+        open={mobileContextOpen}
+        onClose={() => setMobileContextOpen(false)}
+        session={session}
+        selectedSource={selectedSource}
+        artifacts={artifacts}
+      />
 
       {/* Right: Context sidebar */}
       <aside className="hidden w-72 shrink-0 border-l border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 lg:flex flex-col">

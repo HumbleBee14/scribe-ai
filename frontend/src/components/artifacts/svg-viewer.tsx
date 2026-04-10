@@ -78,7 +78,7 @@ export function SVGViewer({ code, title }: Props) {
       ) : (
         <div className="p-4">
           <div className="flex items-start gap-2 text-sm text-red-400">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <AlertCircle suppressHydrationWarning className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
               <p>Invalid SVG content</p>
               <pre className="mt-2 overflow-x-auto rounded bg-neutral-950 p-2 text-xs text-neutral-400">

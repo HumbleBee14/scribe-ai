@@ -91,7 +91,8 @@ export type SSEEvent =
 /** An ordered content block in an assistant message. */
 export type ContentBlock =
   | { type: "text"; text: string }
-  | { type: "image"; data: ImageEvent["data"] };
+  | { type: "image"; data: ImageEvent["data"] }
+  | { type: "artifact"; data: ArtifactEvent["data"] };
 
 /** Chat message stored in frontend state. */
 export interface ChatMessage {
