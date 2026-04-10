@@ -54,3 +54,13 @@ body {
   border: 1px solid var(--border);
   border-radius: 0.5em;
 }
+/* Tables */
+.prose table { border-collapse: collapse; width: 100%; font-size: 0.85em; }
+.prose thead { background: #f3f4f6; }
+.dark .prose thead { background: #1a1a2e; }
+.prose th { padding: 8px 12px; font-weight: 600; text-align: left; border: 1px solid #e5e7eb; }
+.dark .prose th { border-color: #333; }
+.prose td { padding: 6px 12px; border: 1px solid #e5e7eb; }
+.dark .prose td { border-color: #333; }
+.prose tr:nth-child(even) { background: #f9fafb; }
+.dark .prose tr:nth-child(even) { background: #111; }

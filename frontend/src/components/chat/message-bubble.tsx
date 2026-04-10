@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   AlertTriangle,
   Bot,
+  CheckCircle,
+  ChevronDown,
   ExternalLink,
-  Loader2,
   ImageIcon,
-  Search,
+  Loader2,
   ShieldAlert,
   User,
   X,
@@ -122,20 +124,8 @@ export function MessageBubble({
           </div>
         ))}
 
-        {/* Tool call badges */}
-        {message.toolCalls?.map((tc, i) => (
-          <div
-            key={i}
-            className="flex items-center gap-2 text-xs text-gray-400 dark:text-neutral-500"
-          >
-            {tc.ok === undefined ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Search className="h-3 w-3" />
-            )}
-            <span>{tc.label}</span>
-          </div>
-        ))}
+        {/* Tool calls: show only during streaming; collapse when done */}
+        <ToolCallsSection toolCalls={message.toolCalls} isStreaming={!!message.isStreaming} />
 
         {/* Main text */}
         {message.content && (
@@ -147,7 +137,7 @@ export function MessageBubble({
             }`}
           >
             <div className={`prose prose-sm max-w-none ${isUser ? "prose-invert" : "dark:prose-invert"}`}>
-              <ReactMarkdown>{message.content}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
             </div>
           </div>
         )}
@@ -237,6 +227,91 @@ export function MessageBubble({
             </div>
           )}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ToolCallsSection: smart display of tool calls
+// - During streaming: show each call as it happens (deduped by label)
+// - After done: collapsed into a single "N steps" pill, expandable
+// ---------------------------------------------------------------------------
+
+interface ToolCall {
+  tool: string;
+  label: string;
+  ok?: boolean;
+}
+
+function ToolCallsSection({
+  toolCalls,
+  isStreaming,
+}: {
+  toolCalls?: ToolCall[];
+  isStreaming: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const calls = useMemo(() => toolCalls ?? [], [toolCalls]);
+  const pending = calls.filter((t) => t.ok === undefined);
+  const done = calls.filter((t) => t.ok !== undefined);
+
+  if (calls.length === 0) return null;
+
+  // While streaming: show only currently-running calls (deduped by label)
+  if (isStreaming) {
+    const seen = new Set<string>();
+    const visible = calls.filter((t) => {
+      if (seen.has(t.label)) return false;
+      seen.add(t.label);
+      return true;
+    });
+    return (
+      <div className="flex flex-col gap-1">
+        {visible.map((tc, i) => (
+          <div key={i} className="flex items-center gap-2 text-xs text-gray-400 dark:text-neutral-500">
+            {tc.ok === undefined ? (
+              <Loader2 className="h-3 w-3 animate-spin text-orange-400" />
+            ) : (
+              <CheckCircle className="h-3 w-3 text-green-500" />
+            )}
+            <span>{tc.label}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // After done: collapsed pill summarising what ran
+  const uniqueLabels = [...new Set(calls.map((t) => t.label))];
+  const summary =
+    uniqueLabels.length === 1
+      ? uniqueLabels[0]
+      : `${calls.length} steps`;
+
+  return (
+    <div className="text-xs">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1.5 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 transition-colors"
+      >
+        <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
+        <span>{summary}</span>
+        <ChevronDown
+          className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {expanded && (
+        <div className="mt-1.5 ml-1 flex flex-col gap-1 border-l-2 border-gray-100 dark:border-neutral-800 pl-3">
+          {calls.map((tc, i) => (
+            <div key={i} className="flex items-center gap-2 text-gray-400 dark:text-neutral-500">
+              <CheckCircle className="h-2.5 w-2.5 text-green-500 shrink-0" />
+              <span>{tc.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
