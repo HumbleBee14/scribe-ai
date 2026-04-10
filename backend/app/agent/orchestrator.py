@@ -16,6 +16,7 @@ from claude_agent_sdk import (
 
 from app.agent.prompts import build_system_prompt
 from app.agent.tools_mcp import MCP_SERVER_NAME, create_knowledge_mcp_server
+from app.context.assembler import ContextAssembler
 from app.core.config import settings
 from app.packs.models import ProductRuntime
 from app.packs.registry import get_product_registry, use_product_runtime
@@ -73,6 +74,7 @@ class AgentOrchestrator:
     def __init__(self) -> None:
         self._mcp_server = create_knowledge_mcp_server()
         self._model = settings.llm_model
+        self._context_assembler = ContextAssembler()
 
     async def run(
         self,
@@ -109,6 +111,7 @@ class AgentOrchestrator:
             prompt: Any = self._build_multimodal_prompt(user_message, images)
         else:
             prompt = user_message
+        context_bundle = self._context_assembler.assemble(user_message, session, runtime)
 
         options = ClaudeAgentOptions(
             model=self._model,
@@ -118,6 +121,7 @@ class AgentOrchestrator:
                 product_description=runtime.manifest.description,
                 manual_path=str(runtime.manual_path) if runtime.manual_path else "",
                 domain=runtime.domain,
+                assembled_context=context_bundle.to_prompt_section(),
             ),
             mcp_servers={MCP_SERVER_NAME: self._mcp_server},
             max_turns=MAX_AGENT_TURNS,

@@ -72,6 +72,7 @@ def build_system_prompt(
     product_description: str = "",
     manual_path: str = "",
     domain: str = "generic",
+    assembled_context: str = "",
 ) -> str:
     """Build the full system prompt for the Claude Agent SDK."""
     parts = [GENERIC_SYSTEM_PROMPT]
@@ -88,6 +89,8 @@ def build_system_prompt(
             f"You can use the Read tool to look up any information from the manual "
             f"when specialized product tools and retrieved context do not cover the question.\n"
         )
+    if assembled_context:
+        parts.append(f"\n## Preselected grounded context\n{assembled_context}\n")
     if session_context:
         parts.append(f"\n## Current session context\n{session_context}\n")
     return "".join(parts)
