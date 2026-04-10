@@ -8,12 +8,6 @@ interface Props {
   title?: string;
 }
 
-/**
- * Renders Mermaid diagrams in a sandboxed iframe with zoom/pan support.
- * - Iframe isolates Mermaid DOM mutations from React
- * - svg-pan-zoom provides zoom/scroll/drag on the rendered SVG
- * - Mermaid v11 pinned via jsDelivr CDN
- */
 export function MermaidViewer({ code, title }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(400);
@@ -24,9 +18,8 @@ export function MermaidViewer({ code, title }: Props) {
       if (!iframeRef.current) return;
       if (event.source !== iframeRef.current.contentWindow) return;
       if (!event.data || typeof event.data !== "object") return;
-
       if (event.data.type === "mermaid-resize") {
-        setHeight(Math.min(Math.max(event.data.height + 40, 150), 800));
+        setHeight(Math.min(Math.max(event.data.height, 200), 800));
       }
       if (event.data.type === "mermaid-error") {
         setError(event.data.message);
@@ -36,14 +29,15 @@ export function MermaidViewer({ code, title }: Props) {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  // Sanitize: literal \n to newlines, strip control chars
   const cleanCode = code
     .replace(/\\n/g, "\n")
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+  const escaped = cleanCode
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 
-  // Escape for safe HTML embedding
-  const escaped = cleanCode.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
+  // Simple approach: let SVG use viewBox for auto-scaling, overflow scroll for manual zoom
   const iframeHtml = `<!DOCTYPE html>
 <html>
 <head>
@@ -51,33 +45,38 @@ export function MermaidViewer({ code, title }: Props) {
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0f172a; overflow: hidden; }
   #viewport {
-    width: 100%; height: 100vh;
-    overflow: hidden; cursor: grab;
-    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100vh; overflow: hidden;
+    cursor: grab; position: relative;
   }
   #viewport:active { cursor: grabbing; }
-  #canvas { transform-origin: 0 0; transition: none; }
-  #canvas svg { display: block; }
+  #diagram {
+    transform-origin: 0 0;
+    width: 100%; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  #diagram svg { width: 100%; height: auto; max-height: 95vh; }
   .error { color: #f87171; font: 13px system-ui; padding: 16px; }
   .error pre { margin-top: 8px; font-size: 11px; color: #9ca3af; white-space: pre-wrap; }
   .controls {
-    position: fixed; bottom: 8px; right: 8px; display: flex; gap: 4px;
-    font: 11px system-ui; z-index: 10;
+    position: fixed; bottom: 8px; right: 8px; display: flex; gap: 4px; z-index: 10;
   }
   .controls button {
     background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
-    color: #94a3b8; border-radius: 4px; width: 28px; height: 28px;
-    cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
+    color: #94a3b8; border-radius: 6px; width: 30px; height: 30px;
+    cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center;
   }
   .controls button:hover { background: rgba(255,255,255,0.2); color: #fff; }
 </style>
 </head>
 <body>
-<div id="viewport"><div id="canvas"><pre class="mermaid">${escaped}</pre></div></div>
+<div id="viewport">
+  <div id="diagram"><pre class="mermaid">${escaped}</pre></div>
+</div>
 <div class="controls">
   <button id="zin" title="Zoom in">+</button>
   <button id="zout" title="Zoom out">-</button>
-  <button id="zreset" title="Reset">R</button>
+  <button id="zreset" title="Reset view">&#x21BA;</button>
 </div>
 <script type="module">
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs';
@@ -94,49 +93,69 @@ mermaid.initialize({
 
 try {
   const el = document.querySelector('.mermaid');
-  const { svg } = await mermaid.render('diagram', el.textContent);
-  const canvas = document.getElementById('canvas');
-  canvas.innerHTML = svg;
+  const { svg } = await mermaid.render('mmd-render-target', el.textContent);
+  const container = document.getElementById('diagram');
+  container.innerHTML = svg;
 
-  const svgEl = canvas.querySelector('svg');
-  const h = svgEl ? svgEl.getBoundingClientRect().height : canvas.scrollHeight;
-  window.parent.postMessage({ type: 'mermaid-resize', height: Math.ceil(h) }, '*');
+  const svgEl = container.querySelector('svg');
+  if (svgEl) {
+    // Read natural size before we modify anything
+    const natW = svgEl.width?.baseVal?.value || svgEl.getBoundingClientRect().width;
+    const natH = svgEl.height?.baseVal?.value || svgEl.getBoundingClientRect().height;
 
-  // Pan and zoom state
-  let scale = 1, panX = 0, panY = 0, dragging = false, startX = 0, startY = 0;
+    // Set viewBox so SVG scales responsively
+    if (!svgEl.getAttribute('viewBox') && natW > 0 && natH > 0) {
+      svgEl.setAttribute('viewBox', '0 0 ' + natW + ' ' + natH);
+    }
+    svgEl.removeAttribute('width');
+    svgEl.removeAttribute('height');
+    svgEl.style.width = '100%';
+    svgEl.style.height = 'auto';
+    svgEl.style.maxHeight = '95vh';
+
+    // Tell parent the rendered height
+    requestAnimationFrame(() => {
+      const rect = svgEl.getBoundingClientRect();
+      window.parent.postMessage({ type: 'mermaid-resize', height: Math.ceil(rect.height) + 32 }, '*');
+    });
+  }
+
+  // Pan and zoom on the diagram container
   const viewport = document.getElementById('viewport');
+  const diagram = document.getElementById('diagram');
+  let scale = 1, panX = 0, panY = 0, dragging = false, sx = 0, sy = 0;
 
-  function applyTransform() {
-    canvas.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + scale + ')';
+  function apply() {
+    diagram.style.transform = 'translate('+panX+'px,'+panY+'px) scale('+scale+')';
   }
 
   viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.2, Math.min(5, scale * delta));
-    // Zoom toward cursor
-    const rect = viewport.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    panX = mx - (mx - panX) * (newScale / scale);
-    panY = my - (my - panY) * (newScale / scale);
-    scale = newScale;
-    applyTransform();
+    const d = e.deltaY > 0 ? 0.9 : 1.1;
+    const ns = Math.max(0.1, Math.min(10, scale * d));
+    const r = viewport.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    panX = mx - (mx - panX) * (ns / scale);
+    panY = my - (my - panY) * (ns / scale);
+    scale = ns;
+    apply();
   }, { passive: false });
 
-  viewport.addEventListener('mousedown', (e) => { dragging = true; startX = e.clientX - panX; startY = e.clientY - panY; });
-  viewport.addEventListener('mousemove', (e) => { if (!dragging) return; panX = e.clientX - startX; panY = e.clientY - startY; applyTransform(); });
+  viewport.addEventListener('mousedown', (e) => { dragging = true; sx = e.clientX - panX; sy = e.clientY - panY; });
+  viewport.addEventListener('mousemove', (e) => { if (!dragging) return; panX = e.clientX - sx; panY = e.clientY - sy; apply(); });
   viewport.addEventListener('mouseup', () => { dragging = false; });
   viewport.addEventListener('mouseleave', () => { dragging = false; });
 
-  document.getElementById('zin').addEventListener('click', () => { scale = Math.min(5, scale * 1.3); applyTransform(); });
-  document.getElementById('zout').addEventListener('click', () => { scale = Math.max(0.2, scale * 0.7); applyTransform(); });
-  document.getElementById('zreset').addEventListener('click', () => { scale = 1; panX = 0; panY = 0; applyTransform(); });
+  document.getElementById('zin').addEventListener('click', () => { scale = Math.min(10, scale * 1.3); apply(); });
+  document.getElementById('zout').addEventListener('click', () => { scale = Math.max(0.1, scale * 0.7); apply(); });
+  document.getElementById('zreset').addEventListener('click', () => { scale = 1; panX = 0; panY = 0; apply(); });
 
 } catch (err) {
-  document.getElementById('canvas').innerHTML =
-    '<div class="error"><strong>Diagram render failed</strong><pre>' + (err.message || err) + '</pre></div>';
+  document.getElementById('diagram').innerHTML =
+    '<div class="error"><strong>Diagram render failed</strong><pre>' +
+    (err.message || err) + '</pre></div>';
   window.parent.postMessage({ type: 'mermaid-error', message: err.message || String(err) }, '*');
-  window.parent.postMessage({ type: 'mermaid-resize', height: document.body.scrollHeight }, '*');
+  window.parent.postMessage({ type: 'mermaid-resize', height: 100 }, '*');
 }
 </script>
 </body>
@@ -149,7 +168,6 @@ try {
           {title}
         </div>
       )}
-
       {error ? (
         <div className="p-4">
           <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400">

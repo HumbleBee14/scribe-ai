@@ -89,29 +89,29 @@ export function ArtifactRenderer({ artifact, onSelectSourcePage }: Props) {
       {/* Zoom modal */}
       {zoomed && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-8"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
           onClick={() => setZoomed(false)}
         >
           <div
-            className="relative w-full max-w-5xl max-h-[90vh] overflow-auto rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl border border-gray-200 dark:border-neutral-700"
+            className="relative w-full max-w-6xl max-h-[94vh] flex flex-col rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl border border-gray-200 dark:border-neutral-700 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal header */}
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-6 py-3 rounded-t-2xl">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{title}</h3>
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-700 px-6 py-3 shrink-0">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-neutral-100 truncate">{title}</h3>
                 <p className="text-xs text-gray-400 dark:text-neutral-500 uppercase">{renderer}</p>
               </div>
               <button
                 onClick={() => setZoomed(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Modal content */}
-            <div className="p-6">
+            {/* Content: scrollable, iframe stretches to fill */}
+            <div className="flex-1 overflow-auto min-h-0 bg-gray-50 dark:bg-neutral-950 [&_iframe]:!min-h-[60vh]">
               {renderContent(true)}
             </div>
           </div>
