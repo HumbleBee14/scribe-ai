@@ -72,10 +72,12 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
         evt_type = event["event"]
         # Log non-text events for debugging (text_delta is too noisy)
         if evt_type != "text_delta":
-            logger.info("[sse] %s: %s", evt_type, {
+            debug_data = {
                 k: (v[:80] + "..." if isinstance(v, str) and len(v) > 80 else v)
                 for k, v in event["data"].items()
-            })
+            }
+            # Use print() to guarantee visibility regardless of log level
+            print(f"[SSE] {evt_type}: {debug_data}", flush=True)
         if evt_type == "text_delta":
             assistant_chunks.append(event["data"].get("content", ""))
         elif event["event"] == "clarification":

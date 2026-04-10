@@ -156,6 +156,8 @@ class AgentOrchestrator:
         images: list[dict[str, str]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Run via Claude Agent SDK when local CLI transport is available."""
+        # Reset per-request streaming state
+        self.__init_stream_state()
 
         # Build prompt: either string (no images) or AsyncIterable (with images)
         if images:
@@ -442,12 +444,22 @@ class AgentOrchestrator:
 
         return await asyncio.gather(*[_run_one(tool_call) for tool_call in tool_calls])
 
+    def __init_stream_state(self) -> None:
+        """Reset per-request streaming state for tool input accumulation."""
+        # Track in-progress tool blocks by index
+        # {block_index: {"name": "render_artifact", "input_json": ""}}
+        self._active_tool_blocks: dict[int, dict[str, str]] = {}
+
     def _map_stream_event(
         self,
         event: StreamEvent,
         session: Session,
     ) -> list[dict[str, Any]]:
-        """Map StreamEvent to SSE events."""
+        """Map StreamEvent to SSE events.
+
+        Accumulates tool input JSON from delta events and emits artifact/image/etc
+        events when the content block finishes.
+        """
         evt = event.event
         evt_type = evt.get("type", "")
         results: list[dict[str, Any]] = []
@@ -455,9 +467,15 @@ class AgentOrchestrator:
         if evt_type == "content_block_start":
             cb = evt.get("content_block", {})
             cb_type = cb.get("type", "")
+            idx = evt.get("index", -1)
             if cb_type == "tool_use":
                 tool_name = cb.get("name", "")
-                # Skip internal ToolSearch calls
+                # Track this block so we can accumulate its input JSON
+                self._active_tool_blocks[idx] = {
+                    "name": tool_name,
+                    "input_json": "",
+                }
+                # Skip internal ToolSearch calls for UI
                 if tool_name != "ToolSearch":
                     results.append({
                         "event": "tool_start",
@@ -471,6 +489,8 @@ class AgentOrchestrator:
         elif evt_type == "content_block_delta":
             delta = evt.get("delta", {})
             delta_type = delta.get("type", "")
+            idx = evt.get("index", -1)
+
             if delta_type == "text_delta":
                 text = delta.get("text", "")
                 if text:
@@ -478,6 +498,44 @@ class AgentOrchestrator:
                         "event": "text_delta",
                         "data": {"content": text},
                     })
+
+            elif delta_type == "input_json_delta":
+                # Accumulate tool input JSON chunks
+                partial = delta.get("partial_json", "")
+                if idx in self._active_tool_blocks:
+                    self._active_tool_blocks[idx]["input_json"] += partial
+
+        elif evt_type == "content_block_stop":
+            idx = evt.get("index", -1)
+            if idx in self._active_tool_blocks:
+                block = self._active_tool_blocks.pop(idx)
+                tool_name = _strip_mcp_prefix(block["name"])
+
+                # Parse the accumulated JSON
+                tool_input: dict[str, Any] = {}
+                if block["input_json"]:
+                    try:
+                        tool_input = json.loads(block["input_json"])
+                    except json.JSONDecodeError:
+                        print(
+                            f"[WARN] Failed to parse tool input for {tool_name}: "
+                            f"{block['input_json'][:200]}",
+                            flush=True,
+                        )
+
+                # Now emit tool-specific events (artifact, image, safety, etc)
+                if tool_name != "ToolSearch" and tool_input:
+                    print(
+                        f"[TOOL-COMPLETE] {tool_name}: "
+                        f"keys={list(tool_input.keys())}, "
+                        f"code_len={len(tool_input.get('code', ''))}",
+                        flush=True,
+                    )
+                    results.extend(
+                        self._emit_tool_specific_events(
+                            tool_name, tool_input, session
+                        )
+                    )
 
         return results
 
@@ -496,11 +554,8 @@ class AgentOrchestrator:
                 tool_name = _strip_mcp_prefix(block.name)
                 tool_input = getattr(block, "input", {}) or {}
 
-                logger.info(
-                    "[sdk-event] tool_use: %s, input_keys=%s",
-                    tool_name,
-                    list(tool_input.keys()) if isinstance(tool_input, dict) else "?",
-                )
+                keys = list(tool_input.keys()) if isinstance(tool_input, dict) else "?"
+                print(f"[SDK-TOOL] {tool_name}: keys={keys}", flush=True)
 
                 # Skip ToolSearch (internal SDK tool)
                 if block.name == "ToolSearch":
@@ -579,9 +634,10 @@ class AgentOrchestrator:
             renderer = tool_input.get("type", "")
             code = tool_input.get("code", "")
             title = tool_input.get("title", "")
-            logger.info(
-                "[artifact] type=%s, title=%s, code_length=%d",
-                renderer, title, len(code),
+            print(
+                f"[ARTIFACT] type={renderer}, title={title}, "
+                f"code_length={len(code)}, code_preview={code[:150]}...",
+                flush=True,
             )
             if code:
                 results.append({
