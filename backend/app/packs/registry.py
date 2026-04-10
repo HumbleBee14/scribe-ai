@@ -144,6 +144,7 @@ class ProductRegistry:
             "id": product_id,
             "product_name": name,
             "description": description,
+            "logo_path": None,
             "domain": "generic",
             "status": "draft",
             "sources": [],
@@ -187,6 +188,23 @@ class ProductRegistry:
         if manifest.get("status") in {"draft", "idle"}:
             manifest["status"] = "processing"
 
+        runtime.manifest_path.write_text(
+            yaml.safe_dump(manifest, sort_keys=False),
+            encoding="utf-8",
+        )
+        self._cache.pop(product_id, None)
+        return self.require_product(product_id)
+
+    def save_logo(self, product_id: str, filename: str, content: bytes) -> ProductRuntime:
+        runtime = self.require_product(product_id)
+        assets_dir = runtime.root_dir / "assets"
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        extension = Path(filename).suffix.lower() or ".png"
+        target_path = assets_dir / f"logo{extension}"
+        target_path.write_bytes(content)
+
+        manifest = self._load_manifest(runtime.manifest_path)
+        manifest["logo_path"] = str(target_path.relative_to(runtime.root_dir)).replace("\\", "/")
         runtime.manifest_path.write_text(
             yaml.safe_dump(manifest, sort_keys=False),
             encoding="utf-8",
@@ -305,6 +323,7 @@ class ProductRegistry:
             id=str(data["id"]),
             product_name=str(data.get("product_name") or data["id"]),
             description=str(data.get("description", "")),
+            logo_path=data.get("logo_path"),
             manufacturer=data.get("manufacturer"),
             item_number=data.get("item_number"),
             domain=domain,

@@ -4,24 +4,32 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageSquare, PanelLeftClose, Pencil, PenSquare, Trash2 } from "lucide-react";
 import {
   ConversationSummary,
+  deleteConversationMessages,
   deleteConversation,
   listConversations,
   saveConversation,
 } from "@/lib/history";
 
 interface Props {
+  productId: string;
   activeId: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;
   onCollapse: () => void;
 }
 
-export function HistorySidebar({ activeId, onSelect, onNew, onCollapse }: Props) {
+export function HistorySidebar({
+  productId,
+  activeId,
+  onSelect,
+  onNew,
+  onCollapse,
+}: Props) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
 
   const reload = useCallback(() => {
-    setConversations(listConversations());
-  }, []);
+    setConversations(listConversations(productId));
+  }, [productId]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(reload, 0);
@@ -38,8 +46,9 @@ export function HistorySidebar({ activeId, onSelect, onNew, onCollapse }: Props)
   }, [reload]);
 
   const handleDelete = (id: string) => {
-    deleteConversation(id);
-    setConversations(listConversations());
+    deleteConversation(productId, id);
+    deleteConversationMessages(productId, id);
+    setConversations(listConversations(productId));
     if (id === activeId) onNew();
   };
 
@@ -84,6 +93,7 @@ export function HistorySidebar({ activeId, onSelect, onNew, onCollapse }: Props)
               onSelect={() => onSelect(conv.id)}
               onDelete={() => handleDelete(conv.id)}
               onRename={reload}
+              productId={productId}
             />
           ))
         )}
@@ -98,12 +108,14 @@ function ConversationRow({
   onSelect,
   onDelete,
   onRename,
+  productId,
 }: {
   conv: ConversationSummary;
   isActive: boolean;
   onSelect: () => void;
   onDelete: () => void;
   onRename: () => void;
+  productId: string;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -123,7 +135,13 @@ function ConversationRow({
     >
       <MessageSquare suppressHydrationWarning className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-50" />
       <div className="min-w-0 flex-1">
-        <EditableTitle conv={conv} editing={editing} onRename={onRename} onEditDone={() => setEditing(false)} />
+        <EditableTitle
+          conv={conv}
+          editing={editing}
+          onRename={onRename}
+          onEditDone={() => setEditing(false)}
+          productId={productId}
+        />
         <div className="text-[10px] text-gray-400 dark:text-neutral-400">
           {conv.messageCount} {conv.messageCount === 1 ? "message" : "messages"}
         </div>
@@ -160,11 +178,13 @@ function EditableTitle({
   editing,
   onRename,
   onEditDone,
+  productId,
 }: {
   conv: ConversationSummary;
   editing: boolean;
   onRename: () => void;
   onEditDone: () => void;
+  productId: string;
 }) {
   const [value, setValue] = useState(conv.title);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -183,7 +203,7 @@ function EditableTitle({
   const save = () => {
     const trimmed = value.trim();
     if (trimmed && trimmed !== conv.title) {
-      saveConversation({ ...conv, title: trimmed });
+      saveConversation(productId, { ...conv, title: trimmed });
       onRename();
     }
     onEditDone();

@@ -9,11 +9,12 @@ import { DialogShell } from "@/components/ui/dialog-shell";
 import type { ArtifactEvent, SelectedSourcePage } from "@/types/events";
 
 interface Props {
+  productId: string;
   selectedSource: SelectedSourcePage | null;
   artifacts: ArtifactEvent["data"][];
 }
 
-export function SourceViewer({ selectedSource, artifacts }: Props) {
+export function SourceViewer({ productId, selectedSource, artifacts }: Props) {
   return (
     <div className="mt-6 space-y-4">
       <div>
@@ -26,7 +27,7 @@ export function SourceViewer({ selectedSource, artifacts }: Props) {
       </div>
 
       {selectedSource ? (
-        <SourceCard source={selectedSource} />
+        <SourceCard productId={productId} source={selectedSource} />
       ) : (
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-neutral-700 bg-gray-50/40 dark:bg-neutral-900/40 p-4 text-sm text-gray-400 dark:text-neutral-400">
           No source selected yet.
@@ -54,7 +55,13 @@ export function SourceViewer({ selectedSource, artifacts }: Props) {
 // Designed to handle images now, extensible for PDFs and multi-page docs
 // ---------------------------------------------------------------------------
 
-function SourceCard({ source }: { source: SelectedSourcePage }) {
+function SourceCard({
+  productId,
+  source,
+}: {
+  productId: string;
+  source: SelectedSourcePage;
+}) {
   const [modalOpen, setModalOpen] = useState(false);
 
   // All pages to show (single page or range)
@@ -100,7 +107,7 @@ function SourceCard({ source }: { source: SelectedSourcePage }) {
                   </div>
                 )}
                 <Image
-                  src={getManualPageImageUrl(p)}
+                  src={getManualPageImageUrl(productId, p, source.sourceId ?? "default")}
                   alt={`Page ${p}`}
                   unoptimized
                   width={1200}
@@ -123,6 +130,8 @@ function SourceCard({ source }: { source: SelectedSourcePage }) {
               : `Page ${source.page}${source.description ? ` \u00B7 ${source.description}` : ""}`
           }
           pages={pages}
+          productId={productId}
+          sourceId={source.sourceId ?? "default"}
           onClose={() => setModalOpen(false)}
         />
       )}
@@ -140,12 +149,16 @@ function DocumentPreviewModal({
   title,
   subtitle,
   pages,
+  productId,
+  sourceId,
   onClose,
 }: {
   title: string;
   subtitle?: string;
   /** Page numbers to render. Single page or a range. */
   pages: number[];
+  productId: string;
+  sourceId: string;
   onClose: () => void;
 }) {
   return (
@@ -165,7 +178,7 @@ function DocumentPreviewModal({
               </div>
             )}
             <Image
-              src={getManualPageImageUrl(p)}
+              src={getManualPageImageUrl(productId, p, sourceId)}
               alt={`Page ${p}`}
               unoptimized
               width={1400}

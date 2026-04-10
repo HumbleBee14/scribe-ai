@@ -224,7 +224,11 @@ export function PageImageBlock({
         <button
           type="button"
           onClick={() =>
-            onSelectSourcePage?.({ page: img.page, title: `Manual Page ${img.page}` })
+            onSelectSourcePage?.({
+              page: img.page,
+              sourceId: img.source_id,
+              title: `Manual Page ${img.page}`,
+            })
           }
           className="inline-flex items-center gap-1 text-orange-500 hover:text-orange-600"
         >

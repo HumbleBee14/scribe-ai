@@ -21,6 +21,7 @@ class ProductManifest:
     id: str
     product_name: str
     description: str = ""
+    logo_path: str | None = None
     manufacturer: str | None = None
     item_number: str | None = None
     domain: str = "generic"

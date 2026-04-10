@@ -27,6 +27,11 @@ def _serialize_product(product_id: str) -> dict[str, object]:
         "description": runtime.manifest.description,
         "manufacturer": runtime.manifest.manufacturer,
         "item_number": runtime.manifest.item_number,
+        "logo_url": (
+            f"/api/products/{runtime.id}/assets/logo"
+            if runtime.manifest.logo_path
+            else None
+        ),
         "domain": runtime.domain,
         "status": runtime.status,
         "processes": runtime.processes,
@@ -102,6 +107,26 @@ async def upload_product_documents(
     return _serialize_product(product_id)
 
 
+@router.post("/{product_id}/logo")
+async def upload_product_logo(
+    product_id: str,
+    file: UploadFile = File(...),
+) -> dict[str, object]:
+    registry = get_product_registry()
+    try:
+        registry.require_product(product_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    content = await file.read()
+    registry.save_logo(
+        product_id,
+        filename=file.filename or "logo.png",
+        content=content,
+    )
+    return _serialize_product(product_id)
+
+
 @router.post("/{product_id}/ingest")
 def start_ingestion(product_id: str, background_tasks: BackgroundTasks) -> dict[str, object]:
     registry = get_product_registry()
@@ -168,5 +193,21 @@ def get_figure_asset(product_id: str, filename: str) -> FileResponse:
     path = runtime.figures_dir / Path(filename).name
     if not path.exists():
         raise HTTPException(status_code=404, detail="Figure not found")
+    return FileResponse(path)
+
+
+@router.get("/{product_id}/assets/logo")
+def get_logo_asset(product_id: str) -> FileResponse:
+    registry = get_product_registry()
+    try:
+        runtime = registry.require_product(product_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    if not runtime.manifest.logo_path:
+        raise HTTPException(status_code=404, detail="Logo not found")
+    path = runtime.root_dir / runtime.manifest.logo_path
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Logo not found")
     return FileResponse(path)
 
