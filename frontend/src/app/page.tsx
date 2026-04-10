@@ -43,10 +43,25 @@ export default function Home() {
     [conversationId]
   );
 
-  const artifacts = useMemo(
-    () => messages.flatMap((m) => m.artifacts ?? []),
-    [messages]
-  );
+  const artifacts = useMemo(() => {
+    const regex = /<artifact\s+type="([^"]*)"(?:\s+title="([^"]*)")?[^>]*>([\s\S]*?)<\/artifact>/g;
+    const result: Array<{ id: string; renderer: string; title: string; code: string; source_pages: Array<{ page: number; description: string }> }> = [];
+    for (const m of messages) {
+      if (m.role !== "assistant" || !m.content) continue;
+      const re = new RegExp(regex.source, "g");
+      let match: RegExpExecArray | null;
+      while ((match = re.exec(m.content)) !== null) {
+        result.push({
+          id: `art-${m.id}-${match.index}`,
+          renderer: match[1],
+          title: match[2] || match[1],
+          code: match[3].trim(),
+          source_pages: [],
+        });
+      }
+    }
+    return result;
+  }, [messages]);
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-neutral-950">

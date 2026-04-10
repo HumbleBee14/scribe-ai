@@ -19,10 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { buildBackendUrl } from "@/lib/api";
-import { ArtifactRenderer } from "@/components/artifacts/artifact-renderer";
-import { MermaidViewer } from "@/components/artifacts/mermaid-viewer";
-import { SVGViewer } from "@/components/artifacts/svg-viewer";
-import { HTMLViewer } from "@/components/artifacts/html-viewer";
+import { ArtifactModal, renderArtifactByType } from "@/components/artifacts/artifact-modal";
 import type { ChatMessage, ContentBlock, SelectedSourcePage } from "@/types/events";
 
 /**
@@ -242,9 +239,6 @@ export function MessageBubble({
             {message.pageImages?.map((img, idx) => (
               <PageImageBlock key={idx} img={img} onSelectSourcePage={onSelectSourcePage} onImageClick={setLightboxSrc} />
             ))}
-            {message.artifacts?.map((artifact, idx) => (
-              <ArtifactRenderer key={`${artifact.id}-${idx}`} artifact={artifact} onSelectSourcePage={onSelectSourcePage} />
-            ))}
           </>
         )}
 
@@ -442,11 +436,6 @@ function InlineBlock({
     );
   }
 
-  if (block.type === "artifact") {
-    return (
-      <ArtifactRenderer artifact={block.data} onSelectSourcePage={onSelectSourcePage} />
-    );
-  }
   if (block.type === "image") {
     return (
       <PageImageBlock
@@ -556,32 +545,10 @@ function InlineArtifact({
   const { type, title, content } = artifact;
   const [zoomed, setZoomed] = useState(false);
 
-  useEffect(() => {
-    if (!zoomed) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setZoomed(false); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [zoomed]);
-
-  const renderContent = () => {
-    if (type === "mermaid") return <MermaidViewer code={content} title={title} />;
-    if (type === "svg") return <SVGViewer code={content} title={title} />;
-    if (type === "html" || type === "table") return <HTMLViewer code={content} title={title} />;
-    return (
-      <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3">
-        <div className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{title}</div>
-        <pre className="mt-2 overflow-x-auto rounded bg-gray-50 dark:bg-neutral-950 p-2 text-xs text-gray-700 dark:text-neutral-300">
-          <code>{content.slice(0, 500)}</code>
-        </pre>
-      </div>
-    );
-  };
-
   return (
     <>
-      {/* Inline with expand button on hover */}
       <div className="relative group/art my-2 -mx-2">
-        {renderContent()}
+        {renderArtifactByType(type, content, title)}
         <button
           onClick={() => setZoomed(true)}
           className="absolute top-2 right-2 hidden group-hover/art:flex h-7 w-7 items-center justify-center rounded-lg bg-black/50 text-white hover:bg-black/70 transition-colors"
@@ -590,34 +557,8 @@ function InlineArtifact({
           <Expand className="h-3.5 w-3.5" />
         </button>
       </div>
-
-      {/* Fullscreen modal */}
       {zoomed && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-6"
-          onClick={() => setZoomed(false)}
-        >
-          <div
-            className="relative w-full max-w-5xl h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl border border-gray-200 dark:border-neutral-700 overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-700 px-4 sm:px-6 py-3 shrink-0">
-              <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-neutral-100 truncate">{title}</h3>
-                <p className="text-xs text-gray-400 dark:text-neutral-500 uppercase">{type}</p>
-              </div>
-              <button
-                onClick={() => setZoomed(false)}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex-1 min-h-0 bg-gray-50 dark:bg-neutral-950 [&>div]:h-full [&>div]:!rounded-none [&>div]:!border-0 [&_iframe]:!h-full">
-              {renderContent()}
-            </div>
-          </div>
-        </div>
+        <ArtifactModal type={type} title={title} code={content} onClose={() => setZoomed(false)} />
       )}
     </>
   );

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Expand, FileImage, X } from "lucide-react";
 import { getManualPageImageUrl } from "@/lib/api";
-import { ArtifactRenderer } from "@/components/artifacts/artifact-renderer";
+import { ArtifactModal } from "@/components/artifacts/artifact-modal";
 import type { ArtifactEvent, SelectedSourcePage } from "@/types/events";
 
 interface Props {
@@ -211,15 +211,6 @@ function DocumentPreviewModal({
 function SidebarArtifactList({ artifacts }: { artifacts: ArtifactEvent["data"][] }) {
   const [previewArtifact, setPreviewArtifact] = useState<ArtifactEvent["data"] | null>(null);
 
-  useEffect(() => {
-    if (!previewArtifact) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPreviewArtifact(null);
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [previewArtifact]);
-
   return (
     <>
       <div className="mt-3 space-y-3">
@@ -247,37 +238,13 @@ function SidebarArtifactList({ artifacts }: { artifacts: ArtifactEvent["data"][]
         ))}
       </div>
 
-      {/* Artifact preview modal */}
       {previewArtifact && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-8"
-          onClick={() => setPreviewArtifact(null)}
-        >
-          <div
-            className="relative w-full max-w-5xl max-h-[90vh] overflow-auto rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl border border-gray-200 dark:border-neutral-700"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-6 py-3 rounded-t-2xl">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-neutral-100">
-                  {previewArtifact.title}
-                </h3>
-                <p className="text-xs text-gray-400 dark:text-neutral-500 uppercase">
-                  {previewArtifact.renderer || previewArtifact.type}
-                </p>
-              </div>
-              <button
-                onClick={() => setPreviewArtifact(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="p-6">
-              <ArtifactRenderer artifact={previewArtifact} />
-            </div>
-          </div>
-        </div>
+        <ArtifactModal
+          type={previewArtifact.renderer || previewArtifact.type || ""}
+          title={previewArtifact.title}
+          code={previewArtifact.code}
+          onClose={() => setPreviewArtifact(null)}
+        />
       )}
     </>
   );

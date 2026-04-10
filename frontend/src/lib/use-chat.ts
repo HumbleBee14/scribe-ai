@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { streamChat } from "./api";
 import { listConversations, saveConversation } from "./history";
 import type {
-  ArtifactEvent,
   ChatMessage,
   DoneEvent,
   ErrorEvent,
@@ -172,7 +171,6 @@ export function useChat(conversationId: string) {
         role: "assistant",
         content: "",
         toolCalls: [],
-        artifacts: [],
         pageImages: [],
         safetyWarnings: [],
         isStreaming: true,
@@ -252,15 +250,7 @@ export function useChat(conversationId: string) {
                   break;
                 }
 
-                case "artifact": {
-                  const artData = data as ArtifactEvent["data"];
-                  msg.artifacts = [...(msg.artifacts ?? []), artData];
-                  // Insert artifact block inline; next text_delta starts a new text block
-                  msg.blocks = [...(msg.blocks ?? []), { type: "artifact", data: artData }];
-                  break;
-                }
-
-                case "image": {
+case "image": {
                   const imgData = data as ImageEvent["data"];
                   msg.pageImages = [...(msg.pageImages ?? []), imgData];
                   msg.blocks = [...(msg.blocks ?? []), { type: "image", data: imgData }];

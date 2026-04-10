@@ -91,7 +91,6 @@ export type SSEEvent =
 /** An ordered content block in an assistant message. */
 export type ContentBlock =
   | { type: "text"; text: string }
-  | { type: "artifact"; data: ArtifactEvent["data"] }
   | { type: "image"; data: ImageEvent["data"] };
 
 /** Chat message stored in frontend state. */
@@ -101,7 +100,6 @@ export interface ChatMessage {
   content: string;
   images?: Array<{ mediaType: string; data: string }>;
   toolCalls?: Array<{ tool: string; label: string; ok?: boolean }>;
-  artifacts?: Array<ArtifactEvent["data"]>;
   pageImages?: Array<ImageEvent["data"]>;
   safetyWarnings?: Array<SafetyWarningEvent["data"]>;
   clarification?: ClarificationEvent["data"];
