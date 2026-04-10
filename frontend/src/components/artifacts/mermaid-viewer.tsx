@@ -68,20 +68,20 @@ export function MermaidViewer({ code, title }: Props) {
   }, [code]);
 
   return (
-    <div className="rounded-xl border border-neutral-700 bg-neutral-900 overflow-hidden">
+    <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 overflow-hidden">
       {title && (
-        <div className="border-b border-neutral-800 px-4 py-2 text-sm font-medium text-white">
+        <div className="border-b border-gray-200 dark:border-neutral-700 px-4 py-2 text-sm font-medium text-gray-900 dark:text-neutral-100">
           {title}
         </div>
       )}
 
       {error ? (
         <div className="p-4">
-          <div className="flex items-start gap-2 text-sm text-red-400">
+          <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
               <p>Failed to render Mermaid diagram</p>
-              <pre className="mt-2 overflow-x-auto rounded bg-neutral-950 p-2 text-xs text-neutral-400">
+              <pre className="mt-2 overflow-x-auto rounded bg-gray-50 dark:bg-neutral-950 p-2 text-xs text-gray-500 dark:text-neutral-400">
                 {code}
               </pre>
             </div>
@@ -93,7 +93,7 @@ export function MermaidViewer({ code, title }: Props) {
           className="flex items-center justify-center p-4 [&_svg]:max-w-full"
         >
           {!rendered && (
-            <div className="text-sm text-neutral-500">Rendering diagram...</div>
+            <div className="text-sm text-gray-400 dark:text-neutral-500">Rendering diagram...</div>
           )}
         </div>
       )}

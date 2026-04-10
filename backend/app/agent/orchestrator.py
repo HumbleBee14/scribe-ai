@@ -1,18 +1,19 @@
-"""Agent orchestrator using the Claude Agent SDK.
+"""Agent orchestrator with Agent SDK support and Anthropic fallback.
 
-Uses query() + resume=session_id for multi-turn conversation continuity.
-Custom tools are exposed via MCP. Built-in Read tool is enabled as a
-supplemental capability for broad manual questions.
-
-SDK events are mapped to our frontend SSE contract.
+The preferred path uses the Claude Agent SDK when the local Claude CLI is
+available. For evaluator-friendly zero-setup environments, the orchestrator
+automatically falls back to the raw Anthropic tool loop.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import os
 from collections.abc import AsyncIterator
 from typing import Any
 
+import anthropic
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
@@ -22,11 +23,14 @@ from claude_agent_sdk import (
 )
 
 from app.agent.prompts import build_system_prompt
+from app.agent.tools import execute_tool, get_active_tools
 from app.agent.tools_mcp import MCP_SERVER_NAME, create_knowledge_mcp_server
 from app.core.config import FILES_DIR, settings
+from app.knowledge.full_context import FullContextProvider
 from app.session.manager import Session
 
 logger = logging.getLogger(__name__)
+MAX_TOOL_TURNS = 10
 
 _TOOL_LABELS: dict[str, str] = {
     "lookup_specifications": "Looking up specifications",
@@ -70,9 +74,13 @@ class AgentOrchestrator:
     """
 
     def __init__(self) -> None:
+        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         self._mcp_server = create_knowledge_mcp_server()
         self._model = settings.llm_model
         self._manual_path = str(FILES_DIR / "owner-manual.pdf")
+        self._tools = get_active_tools()
+        self._full_context = FullContextProvider()
+        self._agent_sdk_disabled = False
 
     async def run(
         self,
@@ -81,6 +89,73 @@ class AgentOrchestrator:
         images: list[dict[str, str]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Run the agent and yield SSE events for the frontend."""
+        # Images go directly to the Anthropic client loop.
+        # The Agent SDK subprocess transport does not handle large base64
+        # payloads reliably and will hang without error.
+        if images:
+            async for event in self._run_with_anthropic_loop(user_message, session, images):
+                yield event
+            return
+
+        if self._should_use_agent_sdk():
+            logger.warning(
+                "[agent-runtime] request started via Claude Agent SDK (session=%s)",
+                session.id,
+            )
+            emitted_any = False
+            try:
+                async for event in self._run_with_agent_sdk(user_message, session, images):
+                    emitted_any = True
+                    yield event
+                logger.warning(
+                    "[agent-runtime] request completed via Claude Agent SDK (session=%s)",
+                    session.id,
+                )
+                return
+            except Exception:
+                self._agent_sdk_disabled = True
+                logger.exception(
+                    "[agent-runtime] Claude Agent SDK failed; "
+                    "switching to Anthropic client fallback"
+                )
+                if emitted_any:
+                    yield {
+                        "event": "error",
+                        "data": {
+                            "message": (
+                                "Agent SDK failed after starting a response. "
+                                "Please retry this request."
+                            ),
+                        },
+                    }
+                    return
+
+        logger.warning(
+            "[agent-runtime] request started via Anthropic client fallback (session=%s)",
+            session.id,
+        )
+        async for event in self._run_with_anthropic_loop(user_message, session, images):
+            yield event
+        logger.warning(
+            "[agent-runtime] request completed via Anthropic client fallback (session=%s)",
+            session.id,
+        )
+
+    def _should_use_agent_sdk(self) -> bool:
+        """Use Agent SDK unless explicitly disabled or already failed in-process."""
+        if os.getenv("DISABLE_CLAUDE_AGENT_SDK", "").lower() in {"1", "true", "yes"}:
+            return False
+        if os.getenv("FORCE_CLAUDE_AGENT_SDK", "").lower() in {"1", "true", "yes"}:
+            return True
+        return not self._agent_sdk_disabled
+
+    async def _run_with_agent_sdk(
+        self,
+        user_message: str,
+        session: Session,
+        images: list[dict[str, str]] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Run via Claude Agent SDK when local CLI transport is available."""
 
         # Build prompt: either string (no images) or AsyncIterable (with images)
         if images:
@@ -168,6 +243,139 @@ class AgentOrchestrator:
                     },
                 }
 
+    async def _run_with_anthropic_loop(
+        self,
+        user_message: str,
+        session: Session,
+        images: list[dict[str, str]] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Run the custom Anthropic tool loop used for evaluator-friendly setups."""
+        content: list[dict[str, Any]] = []
+
+        if images:
+            for img in images:
+                content.append({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": img.get("media_type", "image/jpeg"),
+                        "data": img["data"],
+                    },
+                })
+
+        content.append({"type": "text", "text": user_message})
+        messages: list[dict[str, Any]] = [
+            *session.message_history,
+            {"role": "user", "content": content},
+        ]
+
+        system_prompt = build_system_prompt(session.context_summary())
+
+        for turn in range(MAX_TOOL_TURNS):
+            try:
+                response = await self._client.messages.create(
+                    model=self._model,
+                    max_tokens=8096,
+                    system=system_prompt,
+                    tools=self._tools,
+                    messages=self._build_messages_with_context(messages),
+                )
+            except anthropic.APIError as exc:
+                yield {"event": "error", "data": {"message": str(exc)}}
+                return
+
+            tool_calls: list[dict[str, Any]] = []
+            for block in response.content:
+                if block.type == "text":
+                    yield {
+                        "event": "text_delta",
+                        "data": {"content": block.text},
+                    }
+                elif block.type == "tool_use":
+                    yield {
+                        "event": "tool_start",
+                        "data": {
+                            "tool": block.name,
+                            "input": block.input,
+                            "label": _get_tool_label(block.name),
+                        },
+                    }
+                    tool_calls.append({
+                        "id": block.id,
+                        "name": block.name,
+                        "input": block.input,
+                    })
+
+            if response.stop_reason == "end_turn" or not tool_calls:
+                yield {
+                    "event": "done",
+                    "data": {
+                        "status": "completed",
+                        "usage": {
+                            "input_tokens": response.usage.input_tokens,
+                            "output_tokens": response.usage.output_tokens,
+                        },
+                        "turns": turn + 1,
+                    },
+                }
+                return
+
+            assistant_content = [
+                b.model_dump() if hasattr(b, "model_dump") else {
+                    "type": b.type,
+                    **({"text": b.text} if b.type == "text" else {}),
+                    **(
+                        {"id": b.id, "name": b.name, "input": b.input}
+                        if b.type == "tool_use"
+                        else {}
+                    ),
+                }
+                for b in response.content
+            ]
+            messages.append({"role": "assistant", "content": assistant_content})
+
+            tool_results = await self._execute_tools_parallel(tool_calls)
+            tool_result_content: list[dict[str, Any]] = []
+            clarification_requested = False
+
+            for tool_call, result in zip(tool_calls, tool_results):
+                result_str = (
+                    json.dumps(result) if isinstance(result, (dict, list)) else str(result)
+                )
+                tool_result_content.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_call["id"],
+                    "content": result_str,
+                })
+
+                ok = not (isinstance(result, dict) and "error" in result)
+                for event in self._emit_tool_specific_events(
+                    tool_call["name"],
+                    tool_call["input"],
+                    session,
+                    ok=ok,
+                ):
+                    if event["event"] == "clarification":
+                        clarification_requested = True
+                    yield event
+
+            if clarification_requested:
+                yield {
+                    "event": "done",
+                    "data": {
+                        "status": "clarification_required",
+                        "turns": turn + 1,
+                    },
+                }
+                return
+
+            messages.append({"role": "user", "content": tool_result_content})
+
+        yield {
+            "event": "error",
+            "data": {"message": f"Agent exceeded {MAX_TOOL_TURNS} tool turns"},
+        }
+
     async def _build_multimodal_prompt(
         self,
         text: str,
@@ -196,6 +404,43 @@ class AgentOrchestrator:
             }
 
         return _generate()
+
+    def _build_messages_with_context(
+        self,
+        messages: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Inject the full manual PDF into the first user turn when enabled."""
+        if not settings.full_context_mode or not self._full_context.is_available():
+            return messages
+
+        result = list(messages)
+        if result and result[0]["role"] == "user":
+            first_msg = dict(result[0])
+            original_content = first_msg["content"]
+            doc_block = self._full_context.build_document_block()
+            if isinstance(original_content, list):
+                first_msg["content"] = [doc_block, *original_content]
+            else:
+                first_msg["content"] = [doc_block, {"type": "text", "text": str(original_content)}]
+            result[0] = first_msg
+        return result
+
+    async def _execute_tools_parallel(
+        self,
+        tool_calls: list[dict[str, Any]],
+    ) -> list[Any]:
+        """Execute multiple tool calls in parallel."""
+
+        async def _run_one(tool_call: dict[str, Any]) -> Any:
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(
+                None,
+                execute_tool,
+                tool_call["name"],
+                tool_call["input"],
+            )
+
+        return await asyncio.gather(*[_run_one(tool_call) for tool_call in tool_calls])
 
     def _map_stream_event(
         self,
@@ -291,6 +536,7 @@ class AgentOrchestrator:
         tool_name: str,
         tool_input: dict[str, Any],
         session: Session,
+        ok: bool = True,
     ) -> list[dict[str, Any]]:
         """Emit specialized SSE events based on which tool was called."""
         results: list[dict[str, Any]] = []
@@ -343,7 +589,7 @@ class AgentOrchestrator:
             "data": {
                 "tool": tool_name,
                 "label": _get_tool_label(tool_name),
-                "ok": True,
+                "ok": ok,
             },
         })
 

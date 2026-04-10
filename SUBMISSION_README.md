@@ -1,6 +1,6 @@
 # Vulcan OmniPro 220 Multimodal Agent
 
-A production-grade multimodal reasoning agent for the Vulcan OmniPro 220 welding system, built on the **Claude Agent SDK**.
+A production-grade multimodal reasoning agent for the Vulcan OmniPro 220 welding system with a zero-setup local runtime and an optional Claude Agent SDK path when the local Claude CLI is available.
 
 ## Quickstart
 
@@ -8,18 +8,17 @@ A production-grade multimodal reasoning agent for the Vulcan OmniPro 220 welding
 git clone <repo>
 cd multimodal-prox-challenge
 cp .env.example .env   # Add your ANTHROPIC_API_KEY
-
-# Backend
-cd backend
-uv venv && uv pip install -e ".[dev]"
-uv run uvicorn app.main:app --reload --port 8000
-
-# Frontend (new terminal)
-cd frontend
-npm install
-npm run dev
-
+make setup             # Install backend + frontend dependencies
+make backend           # Start backend (terminal 1)
+make frontend          # Start frontend (terminal 2)
 # Open http://localhost:3000
+```
+
+Or without Make:
+
+```bash
+cd backend && uv venv && uv pip install -e ".[dev]" && uv run python run_server.py
+cd frontend && npm install && npm run dev
 ```
 
 No Docker required. No database to install. SQLite is created automatically.
@@ -40,26 +39,28 @@ Ask it anything about the Vulcan OmniPro 220 and it will:
 
 ```
 Frontend (Next.js 16)          Backend (Python FastAPI)
-+------------------+           +------------------------+
-| Chat UI          |   SSE     | Claude Agent SDK       |
-| Artifact viewers | <-------> | (query + resume)       |
-| Session sidebar  |           |                        |
-| Image upload     |           | Custom MCP Tools (10)  |
-+------------------+           | Built-in Read tool     |
-                               |                        |
-                               | Knowledge Engine:      |
-                               | - Structured JSON      |
-                               | - BM25 retrieval       |
-                               | - Validation module    |
-                               +------------------------+
++------------------+           +-------------------------------+
+| Chat UI          |   SSE     | Anthropic tool loop          |
+| Artifact viewers | <-------> | (default local runtime)      |
+| Session sidebar  |           | Optional Agent SDK path      |
+| Image upload     |           | when Claude CLI is present   |
++------------------+           |                               |
+                               | Knowledge Engine:            |
+                               | - Structured JSON            |
+                               | - BM25 retrieval             |
+                               | - Full-context PDF injection |
+                               | - Validation module          |
+                               +-------------------------------+
 ```
 
-### Foundation: Claude Agent SDK
+### Runtime Strategy
 
-The agent uses `claude-agent-sdk` (the official Agent SDK, not the raw Anthropic client) as its orchestration foundation. The SDK handles:
-- The agentic tool loop (message, tool_use, execute, repeat)
-- Token-level streaming
-- Session persistence and multi-turn resume
+The app defaults to the raw Anthropic Messages API tool loop so evaluators only need an API key. When the local Claude CLI is available, the codebase can also use the Claude Agent SDK path for experimentation and parity checks.
+
+Why this split exists:
+- The web app must run locally with a single API key and no extra CLI dependency.
+- `claude-agent-sdk` depends on the local Claude CLI transport, which is not guaranteed in evaluator environments.
+- The Anthropic client path preserves the same tool contracts, SSE UX, multimodal image input, and session behavior without that setup burden.
 
 ### Knowledge Engine: Three Retrieval Paths
 
@@ -76,10 +77,10 @@ The agent uses `claude-agent-sdk` (the official Agent SDK, not the raw Anthropic
 - Sentence-level compression (~60% token savings)
 - Exact-tool precedence enforced: duty cycle/polarity queries redirect to exact tools
 
-**Path 3: Built-in Read** (broad manual access)
-- SDK's native Read tool can access the PDF directly
+**Path 3: Full-context PDF injection** (broad manual access)
+- The full owner manual PDF is injected directly into the first user turn
+- Claude receives the manual with citations-enabled document context
 - Supplements (does not replace) exact-data tools
-- Used for questions that don't map to structured data
 
 ### Artifact System
 
@@ -103,7 +104,7 @@ The agent tracks conversation context:
 - Safety warnings already shown (avoids repeating)
 - Setup steps completed
 
-Multi-turn conversations use the SDK's built-in session resume.
+Multi-turn conversations persist bounded chat history in the app session manager.
 
 ### Evidence Model
 
@@ -114,8 +115,8 @@ Every answer is backed by typed evidence:
 
 ## Design Decisions
 
-### Why Claude Agent SDK (not raw Anthropic client)?
-The challenge requires the Agent SDK as the foundation. The SDK provides the agent loop, session management, and MCP tool integration. Our custom tools are exposed via MCP, and the SDK handles tool discovery and execution.
+### Why raw Anthropic runtime by default?
+The challenge wants agentic behavior, but evaluators also need a zero-friction setup. The raw Anthropic tool loop is the most reliable local runtime because it only needs the API key. The repository still includes the Agent SDK path for environments where the Claude CLI transport is available.
 
 ### Why structured JSON for exact data?
 The challenge tests exact technical values. "What's the duty cycle for MIG at 200A on 240V?" must return exactly "25%". Semantic search over text chunks risks returning paraphrased or adjacent values. Pre-verified JSON with deterministic validation ensures exact answers.
@@ -142,7 +143,7 @@ multimodal-prox-challenge/
       session/       # Session manager (process/voltage/material tracking)
       validation/    # Deterministic answer validation
     scripts/         # Page rendering, chunk extraction, eval runner
-    tests/           # 97 tests
+    tests/           # 104 tests
   frontend/
     src/
       components/
@@ -165,17 +166,17 @@ multimodal-prox-challenge/
 ## Testing
 
 ```bash
-# Unit tests (97 passing)
-cd backend && uv run pytest tests/ -v
+make test              # Unit tests (104 passing)
+make lint              # Backend + frontend lint
+make eval              # Full eval suite (16 live cases, needs API key)
+```
 
-# Lint
+Or without Make:
+
+```bash
+cd backend && uv run pytest tests/ -v
 cd backend && uv run ruff check app/ tests/
 cd frontend && npm run lint
-
-# Live API evaluation (requires ANTHROPIC_API_KEY)
-cd backend && uv run python scripts/test_live_agent.py
-
-# Full eval suite (16 live cases; exits non-zero on failures or needs review)
 cd backend && uv run python scripts/run_eval.py
 ```
 
@@ -193,10 +194,11 @@ The architecture is designed as a reusable document-intelligence platform:
 
 | Layer | Technology |
 |-------|-----------|
-| Agent | Claude Agent SDK (`claude-agent-sdk`) |
+| Agent runtime | Anthropic Messages API tool loop |
+| Optional agent path | Claude Agent SDK (`claude-agent-sdk`) |
 | Model | Claude Sonnet 4.6 |
 | Backend | Python, FastAPI, Pydantic |
-| Frontend | Next.js 15, TypeScript, React 19, Tailwind CSS |
+| Frontend | Next.js 16, TypeScript, React 19, Tailwind CSS |
 | Search | BM25 (rank-bm25) |
 | PDF processing | PyMuPDF |
 | Artifacts | Mermaid.js, sandboxed iframes |

@@ -18,11 +18,18 @@ function nextId(): string {
   return `msg-${++messageCounter}-${Date.now()}`;
 }
 
+const REQUEST_TIMEOUT_MS = 60_000; // 60 seconds
+
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [session, setSession] = useState<SessionState | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const stopStreaming = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
 
   const sendMessage = useCallback(
     async (
@@ -60,6 +67,11 @@ export function useChat() {
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
 
+      // Create abort controller for stop button + timeout
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const timeout = setTimeout(() => controller.abort("timeout"), REQUEST_TIMEOUT_MS);
+
       try {
         const payload = {
           session_id: sessionIdRef.current,
@@ -70,7 +82,7 @@ export function useChat() {
           })),
         };
 
-        for await (const { event, data } of streamChat(payload)) {
+        for await (const { event, data } of streamChat(payload, controller.signal)) {
           if (event === "session_update") {
             const sessionData = data as SessionUpdateEvent["data"];
             setSession({
@@ -176,22 +188,30 @@ export function useChat() {
           )
         );
       } catch (err) {
+        // Ignore aborts triggered by the stop button or timeout
+        const isAbort = err instanceof DOMException && err.name === "AbortError";
+        const msg = isAbort
+          ? controller.signal.reason === "timeout"
+            ? "Request timed out after 60 seconds."
+            : "Stopped."
+          : `Connection error: ${err instanceof Error ? err.message : "Unknown error"}`;
+
         setMessages((prev) =>
           prev.map((message) =>
             message.id === assistantId
               ? {
                   ...message,
-                  content:
-                    message.content +
-                    `\n\n**Connection error:** ${
-                      err instanceof Error ? err.message : "Unknown error"
-                    }`,
+                  content: message.content
+                    ? message.content + (isAbort ? "" : `\n\n**${msg}**`)
+                    : `*${msg}*`,
                   isStreaming: false,
                 }
               : message
           )
         );
       } finally {
+        clearTimeout(timeout);
+        abortRef.current = null;
         setIsStreaming(false);
       }
     },
@@ -204,5 +224,5 @@ export function useChat() {
     setSession(null);
   }, []);
 
-  return { messages, isStreaming, session, sendMessage, clearMessages };
+  return { messages, isStreaming, session, sendMessage, stopStreaming, clearMessages };
 }

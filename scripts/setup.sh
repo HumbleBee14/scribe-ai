@@ -18,6 +18,6 @@ cd ..
 
 echo ""
 echo "Setup complete! To run:"
-echo "  Backend:  cd backend && uv run uvicorn app.main:app --reload --port 8000"
+echo "  Backend:  cd backend && uv run python run_server.py --port 8000"
 echo "  Frontend: cd frontend && npm run dev"
 echo ""
