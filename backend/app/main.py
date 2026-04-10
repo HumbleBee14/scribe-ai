@@ -8,8 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.chat import router as chat_router
+from app.api.products import router as products_router
 from app.api.routes import router as api_router
-from app.core.config import DATA_DIR, KNOWLEDGE_DIR, settings
+from app.core.config import DATA_DIR, KNOWLEDGE_DIR, PRODUCTS_DIR, settings
 
 
 @asynccontextmanager
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Startup / shutdown lifecycle."""
     # Startup: ensure local runtime directories exist.
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    PRODUCTS_DIR.mkdir(parents=True, exist_ok=True)
     KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
     (KNOWLEDGE_DIR / "images").mkdir(exist_ok=True)
     (KNOWLEDGE_DIR / "figures").mkdir(exist_ok=True)
@@ -25,8 +27,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Prox Multimodal Agent API",
-    description="Multimodal reasoning agent for the Vulcan OmniPro 220",
+    title="ProductManualQnA API",
+    description="Local-first multimodal reasoning platform for product manuals",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -55,4 +57,5 @@ if KNOWLEDGE_DIR.exists():
 
 # API routes
 app.include_router(api_router)
+app.include_router(products_router)
 app.include_router(chat_router)

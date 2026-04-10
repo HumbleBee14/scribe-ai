@@ -7,6 +7,7 @@ from app.agent.orchestrator import (
     _get_tool_label,
     _strip_mcp_prefix,
 )
+from app.packs.registry import get_product_registry
 from app.session.manager import Session
 
 
@@ -72,11 +73,13 @@ def test_emit_tool_specific_events_safety() -> None:
     """Safety warnings should update session and emit events."""
     orch = AgentOrchestrator()
     session = Session(id="test")
+    runtime = get_product_registry().require_product(session.product_id)
 
     events = orch._emit_tool_specific_events(
         "lookup_safety_warnings",
         {"category": "electrical"},
         session,
+        runtime,
     )
 
     assert "electrical" in session.safety_warnings_shown
@@ -89,11 +92,13 @@ def test_emit_tool_specific_events_clarification() -> None:
     """Clarification tool should emit clarification event."""
     orch = AgentOrchestrator()
     session = Session(id="test")
+    runtime = get_product_registry().require_product(session.product_id)
 
     events = orch._emit_tool_specific_events(
         "clarify_question",
         {"question": "Which process?", "options": ["MIG", "TIG"]},
         session,
+        runtime,
     )
 
     clarification = [e for e in events if e["event"] == "clarification"]
@@ -106,11 +111,13 @@ def test_emit_tool_specific_events_page_image() -> None:
     """get_page_image should emit image event with correct URL."""
     orch = AgentOrchestrator()
     session = Session(id="test")
+    runtime = get_product_registry().require_product(session.product_id)
 
     events = orch._emit_tool_specific_events(
         "get_page_image",
         {"page": 13},
         session,
+        runtime,
     )
 
     image_events = [e for e in events if e["event"] == "image"]
@@ -122,11 +129,13 @@ def test_emit_tool_specific_events_page_image() -> None:
 def test_emit_tool_specific_events_page_image_accepts_string_page() -> None:
     orch = AgentOrchestrator()
     session = Session(id="test")
+    runtime = get_product_registry().require_product(session.product_id)
 
     events = orch._emit_tool_specific_events(
         "get_page_image",
         {"page": "14"},
         session,
+        runtime,
     )
 
     image_events = [e for e in events if e["event"] == "image"]
@@ -138,11 +147,13 @@ def test_emit_tool_specific_events_page_image_accepts_string_page() -> None:
 def test_emit_tool_specific_events_page_image_ignores_invalid_page() -> None:
     orch = AgentOrchestrator()
     session = Session(id="test")
+    runtime = get_product_registry().require_product(session.product_id)
 
     events = orch._emit_tool_specific_events(
         "get_page_image",
         {"page": "page fourteen"},
         session,
+        runtime,
     )
 
     assert [e["event"] for e in events] == ["tool_end"]
@@ -163,8 +174,9 @@ async def test_run_delegates_to_sdk_runtime(
     orch = AgentOrchestrator()
     session = Session(id="test")
 
-    async def fake_sdk(user_message: str, session: Session, images=None):
+    async def fake_sdk(user_message: str, session: Session, runtime, images=None):
         assert user_message == "hello"
+        assert runtime.id == "vulcan-omnipro-220"
         assert images is None
         yield {"event": "done", "data": {"status": "completed", "turns": 1}}
 
@@ -182,7 +194,8 @@ async def test_run_surfaces_sdk_error_event(
     orch = AgentOrchestrator()
     session = Session(id="test")
 
-    async def fake_sdk(user_message: str, session: Session, images=None):
+    async def fake_sdk(user_message: str, session: Session, runtime, images=None):
+        assert runtime.id == "vulcan-omnipro-220"
         yield {"event": "error", "data": {"message": "Agent runtime error. Please try again."}}
 
     monkeypatch.setattr(orch, "_run_with_agent_sdk", fake_sdk)

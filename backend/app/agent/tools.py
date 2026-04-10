@@ -10,7 +10,8 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 
-from app.knowledge.structured import get_store
+from app.knowledge.structured import StructuredStoreError, get_store
+from app.packs.registry import get_active_product
 from app.retrieval.service import get_retrieval_service
 from app.validation.service import validate_exact_answer
 
@@ -289,8 +290,10 @@ def get_active_tools() -> list[dict]:
     Call this instead of using TOOL_DEFINITIONS directly to avoid
     exposing stub tools to the agent.
     """
+    runtime = get_active_product()
     all_tools = TOOL_DEFINITIONS + DEFERRED_TOOL_DEFINITIONS
-    active_tools = [tool for tool in all_tools if tool["name"] in ACTIVE_TOOL_NAMES]
+    active_names = set(ACTIVE_TOOL_NAMES) & set(runtime.allowed_tool_names)
+    active_tools = [tool for tool in all_tools if tool["name"] in active_names]
     return active_tools
 
 
@@ -323,30 +326,46 @@ def _attach_validation(query_type: str, result: dict, payload: dict | None = Non
 
 def _execute_uncached(name: str, params: dict) -> dict:
     """Execute a tool and return its result."""
-    store = get_store()
+    runtime = get_active_product()
 
     if name in DEFERRED_TOOL_MESSAGES:
         return {"error": DEFERRED_TOOL_MESSAGES[name], "deferred": True}
 
     if name == "lookup_specifications":
+        try:
+            store = get_store(runtime.structured_dir)
+        except StructuredStoreError as exc:
+            return {"error": str(exc)}
         result = store.get_specs(params["process"], params["voltage"])
         if result is None:
             return {"error": f"No specs found for {params['process']} at {params['voltage']}"}
         return result
 
     if name == "lookup_duty_cycle":
+        try:
+            store = get_store(runtime.structured_dir)
+        except StructuredStoreError as exc:
+            return {"error": str(exc)}
         result = store.get_duty_cycle(params["process"], params["voltage"])
         if result is None:
             return {"error": f"No duty cycle for {params['process']} at {params['voltage']}"}
         return result
 
     if name == "lookup_polarity":
+        try:
+            store = get_store(runtime.structured_dir)
+        except StructuredStoreError as exc:
+            return {"error": str(exc)}
         result = store.get_polarity(params["process"])
         if result is None:
             return {"error": f"No polarity data for {params['process']}"}
         return result
 
     if name == "lookup_troubleshooting":
+        try:
+            store = get_store(runtime.structured_dir)
+        except StructuredStoreError as exc:
+            return {"error": str(exc)}
         problem = params.get("problem")
         process = params["process"]
         if problem:
@@ -360,6 +379,10 @@ def _execute_uncached(name: str, params: dict) -> dict:
         return problems
 
     if name == "lookup_safety_warnings":
+        try:
+            store = get_store(runtime.structured_dir)
+        except StructuredStoreError as exc:
+            return {"error": str(exc)}
         result = store.get_safety(params["category"])
         if result is None:
             return {"error": f"No safety data for category '{params['category']}'"}
@@ -372,9 +395,11 @@ def _execute_uncached(name: str, params: dict) -> dict:
         page = params["page"]
         if page < 1:
             return {"error": f"Invalid page number: {page}. Must be >= 1."}
+        source_id = params.get("source_id")
         return {
             "page": page,
-            "image_url": f"/assets/images/page_{page:02d}.png",
+            "image_url": runtime.page_image_url(page, source_id=source_id),
+            "source_id": source_id or runtime.primary_source_id,
         }
 
     if name == "diagnose_weld":
@@ -390,7 +415,7 @@ def _execute_uncached(name: str, params: dict) -> dict:
         }
 
     if name == "search_manual":
-        retrieval = get_retrieval_service()
+        retrieval = get_retrieval_service(runtime.index_dir)
         query_text = params.get("query", "")
         max_results = params.get("max_results", 5)
 

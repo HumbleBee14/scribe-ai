@@ -14,6 +14,8 @@ from pathlib import Path
 
 from rank_bm25 import BM25Okapi
 
+from app.packs.registry import get_active_product
+
 logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "knowledge" / "data"
@@ -156,6 +158,7 @@ class RetrievalService:
                 "text": text,
                 "page": chunk["page"],
                 "section": chunk["section"],
+                "source_id": chunk.get("source_id"),
                 "score": round(score, 4),
             })
 
@@ -222,18 +225,19 @@ class RetrievalService:
 
 
 # Factory
-_service: RetrievalService | None = None
+_services: dict[str, RetrievalService] = {}
 
 
-def get_retrieval_service(data_dir: Path = DATA_DIR) -> RetrievalService:
+def get_retrieval_service(data_dir: Path | None = None) -> RetrievalService:
     """Get or create the retrieval service singleton."""
-    global _service
-    if _service is None:
-        _service = RetrievalService(data_dir)
-    return _service
+    if data_dir is None:
+        data_dir = get_active_product().index_dir
+    key = str(data_dir.resolve())
+    if key not in _services:
+        _services[key] = RetrievalService(data_dir)
+    return _services[key]
 
 
 def reset_retrieval_service() -> None:
     """Reset for tests."""
-    global _service
-    _service = None
+    _services.clear()

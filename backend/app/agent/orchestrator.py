@@ -16,7 +16,9 @@ from claude_agent_sdk import (
 
 from app.agent.prompts import build_system_prompt
 from app.agent.tools_mcp import MCP_SERVER_NAME, create_knowledge_mcp_server
-from app.core.config import FILES_DIR, settings
+from app.core.config import settings
+from app.packs.models import ProductRuntime
+from app.packs.registry import get_product_registry, use_product_runtime
 from app.session.manager import Session
 
 logger = logging.getLogger(__name__)
@@ -71,7 +73,6 @@ class AgentOrchestrator:
     def __init__(self) -> None:
         self._mcp_server = create_knowledge_mcp_server()
         self._model = settings.llm_model
-        self._manual_path = str(FILES_DIR / "owner-manual.pdf")
 
     async def run(
         self,
@@ -80,21 +81,25 @@ class AgentOrchestrator:
         images: list[dict[str, str]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Run the agent and yield SSE events for the frontend."""
+        runtime = get_product_registry().require_product(session.product_id)
         logger.warning(
-            "[agent-runtime] request started via Claude Agent SDK (session=%s)",
+            "[agent-runtime] request started via Claude Agent SDK (session=%s, product=%s)",
             session.id,
+            runtime.id,
         )
-        async for event in self._run_with_agent_sdk(user_message, session, images):
+        async for event in self._run_with_agent_sdk(user_message, session, runtime, images):
             yield event
         logger.warning(
-            "[agent-runtime] request completed via Claude Agent SDK (session=%s)",
+            "[agent-runtime] request completed via Claude Agent SDK (session=%s, product=%s)",
             session.id,
+            runtime.id,
         )
 
     async def _run_with_agent_sdk(
         self,
         user_message: str,
         session: Session,
+        runtime: ProductRuntime,
         images: list[dict[str, str]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Run via the Claude Agent SDK."""
@@ -109,15 +114,21 @@ class AgentOrchestrator:
             model=self._model,
             system_prompt=build_system_prompt(
                 session.context_summary(),
-                manual_path=self._manual_path,
+                product_name=runtime.product_name,
+                product_description=runtime.manifest.description,
+                manual_path=str(runtime.manual_path) if runtime.manual_path else "",
+                domain=runtime.domain,
             ),
             mcp_servers={MCP_SERVER_NAME: self._mcp_server},
             max_turns=MAX_AGENT_TURNS,
             permission_mode="bypassPermissions",
             include_partial_messages=True,
             allowed_tools=[
-                "Read",
-                f"mcp__{MCP_SERVER_NAME}__*",
+                *([ "Read" ] if runtime.manual_path else []),
+                *[
+                    f"mcp__{MCP_SERVER_NAME}__{tool_name}"
+                    for tool_name in runtime.allowed_tool_names
+                ],
             ],
         )
 
@@ -128,52 +139,53 @@ class AgentOrchestrator:
         has_error = False
 
         try:
-            async with ClaudeSDKClient(options=options) as client:
-                await client.query(
-                    prompt=prompt,
-                    session_id=session.sdk_session_id or session.id,
-                )
-                async for event in client.receive_response():
-                    if isinstance(event, StreamEvent):
-                        for sse in self._map_stream_event(event, session):
-                            if sse["event"] == "clarification":
-                                clarification_requested = True
-                            yield sse
+            with use_product_runtime(runtime):
+                async with ClaudeSDKClient(options=options) as client:
+                    await client.query(
+                        prompt=prompt,
+                        session_id=session.sdk_session_id or session.id,
+                    )
+                    async for event in client.receive_response():
+                        if isinstance(event, StreamEvent):
+                            for sse in self._map_stream_event(event, session, runtime):
+                                if sse["event"] == "clarification":
+                                    clarification_requested = True
+                                yield sse
 
-                    elif isinstance(event, AssistantMessage):
-                        for sse in self._map_assistant_message(event, session):
-                            if sse["event"] == "clarification":
-                                clarification_requested = True
-                            yield sse
+                        elif isinstance(event, AssistantMessage):
+                            for sse in self._map_assistant_message(event, session, runtime):
+                                if sse["event"] == "clarification":
+                                    clarification_requested = True
+                                yield sse
 
-                    elif isinstance(event, ResultMessage):
-                        # Capture SDK session ID for multi-turn resume
-                        if event.session_id:
-                            session.sdk_session_id = event.session_id
+                        elif isinstance(event, ResultMessage):
+                            # Capture SDK session ID for multi-turn resume
+                            if event.session_id:
+                                session.sdk_session_id = event.session_id
 
-                        if event.is_error:
-                            has_error = True
-                            yield {
-                                "event": "error",
-                                "data": {
-                                    "message": event.result or "Agent error",
-                                },
-                            }
-                        else:
-                            status = (
-                                "clarification_required"
-                                if clarification_requested
-                                else "completed"
-                            )
-                            yield {
-                                "event": "done",
-                                "data": {
-                                    "status": status,
-                                    "usage": event.usage or {},
-                                    "turns": event.num_turns,
-                                    "cost_usd": event.total_cost_usd,
-                                },
-                            }
+                            if event.is_error:
+                                has_error = True
+                                yield {
+                                    "event": "error",
+                                    "data": {
+                                        "message": event.result or "Agent error",
+                                    },
+                                }
+                            else:
+                                status = (
+                                    "clarification_required"
+                                    if clarification_requested
+                                    else "completed"
+                                )
+                                yield {
+                                    "event": "done",
+                                    "data": {
+                                        "status": status,
+                                        "usage": event.usage or {},
+                                        "turns": event.num_turns,
+                                        "cost_usd": event.total_cost_usd,
+                                    },
+                                }
 
         except Exception:
             logger.exception("Agent SDK runtime error")
@@ -224,6 +236,7 @@ class AgentOrchestrator:
         self,
         event: StreamEvent,
         session: Session,
+        runtime: ProductRuntime,
     ) -> list[dict[str, Any]]:
         """Map StreamEvent to SSE events.
 
@@ -303,7 +316,7 @@ class AgentOrchestrator:
                     )
                     results.extend(
                         self._emit_tool_specific_events(
-                            tool_name, tool_input, session
+                            tool_name, tool_input, session, runtime
                         )
                     )
 
@@ -313,6 +326,7 @@ class AgentOrchestrator:
         self,
         msg: AssistantMessage,
         session: Session,
+        runtime: ProductRuntime,
     ) -> list[dict[str, Any]]:
         """Map a complete AssistantMessage to SSE events."""
         results: list[dict[str, Any]] = []
@@ -332,7 +346,7 @@ class AgentOrchestrator:
                     continue
 
                 results.extend(
-                    self._emit_tool_specific_events(tool_name, tool_input, session)
+                    self._emit_tool_specific_events(tool_name, tool_input, session, runtime)
                 )
 
             elif block_type == "tool_result" and hasattr(block, "content"):
@@ -367,6 +381,7 @@ class AgentOrchestrator:
         tool_name: str,
         tool_input: dict[str, Any],
         session: Session,
+        runtime: ProductRuntime,
         ok: bool = True,
     ) -> list[dict[str, Any]]:
         """Emit specialized SSE events based on which tool was called."""
@@ -396,7 +411,12 @@ class AgentOrchestrator:
                     "event": "image",
                     "data": {
                         "page": page,
-                        "url": f"/assets/images/page_{page:02d}.png",
+                        "url": runtime.page_image_url(
+                            page,
+                            source_id=tool_input.get("source_id"),
+                        ),
+                        "product_id": runtime.id,
+                        "source_id": tool_input.get("source_id") or runtime.primary_source_id,
                     },
                 })
 

@@ -5,6 +5,8 @@ import json
 import logging
 from pathlib import Path
 
+from app.packs.registry import get_active_product
+
 logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -207,13 +209,15 @@ class StructuredStore:
 _stores: dict[str, StructuredStore] = {}
 
 
-def get_store(data_dir: Path = DATA_DIR) -> StructuredStore:
+def get_store(data_dir: Path | None = None) -> StructuredStore:
     """Get or create a StructuredStore for the given data directory.
 
     Keyed by resolved path, so different document packs get separate instances.
     Call this during app startup (lifespan) or in request handlers,
     not at module import time.
     """
+    if data_dir is None:
+        data_dir = get_active_product().structured_dir
     key = str(data_dir.resolve())
     if key not in _stores:
         _stores[key] = StructuredStore(data_dir)
