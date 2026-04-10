@@ -159,6 +159,7 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
           ref={fileRef}
           type="file"
           accept="image/*"
+          capture="environment"
           multiple
           onChange={handleFileUpload}
           className="hidden"
