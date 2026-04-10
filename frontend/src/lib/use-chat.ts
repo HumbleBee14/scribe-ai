@@ -25,7 +25,15 @@ const MESSAGES_STORAGE_PREFIX = "prox_msgs_";
 function loadMessages(conversationId: string): ChatMessage[] {
   try {
     const raw = localStorage.getItem(MESSAGES_STORAGE_PREFIX + conversationId);
-    return raw ? (JSON.parse(raw) as ChatMessage[]) : [];
+    if (!raw) return [];
+    const messages = JSON.parse(raw) as ChatMessage[];
+    // Clean up: ensure no message is stuck in streaming state,
+    // and strip unclosed <artifact> tags from interrupted responses
+    return messages.map((m) => ({
+      ...m,
+      isStreaming: false,
+      content: m.content?.replace(/<artifact\s+[^>]*>(?![\s\S]*<\/artifact>)[\s\S]*$/g, "") ?? "",
+    }));
   } catch {
     return [];
   }

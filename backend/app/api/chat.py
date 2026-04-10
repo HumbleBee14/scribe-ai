@@ -62,6 +62,9 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
         images_raw = [img.model_dump() for img in request.images]
 
     # Run agent and stream events
+    import time
+    req_start = time.time()
+    text_chars = 0
     assistant_chunks: list[str] = []
     clarification_question: str | None = None
     async for event in orchestrator.run(
@@ -70,14 +73,16 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
         images=images_raw,
     ):
         evt_type = event["event"]
-        # Log non-text events for debugging (text_delta is too noisy)
-        if evt_type != "text_delta":
+        elapsed = f"{time.time() - req_start:.1f}s"
+        if evt_type == "text_delta":
+            text_chars += len(event["data"].get("content", ""))
+        else:
             debug_data = {
                 k: (v[:80] + "..." if isinstance(v, str) and len(v) > 80 else v)
                 for k, v in event["data"].items()
             }
-            # Use print() to guarantee visibility regardless of log level
-            print(f"[SSE] {evt_type}: {debug_data}", flush=True)
+            extra = f" (text so far: {text_chars} chars)" if evt_type == "done" else ""
+            print(f"[{elapsed}] {evt_type}: {debug_data}{extra}", flush=True)
         if evt_type == "text_delta":
             assistant_chunks.append(event["data"].get("content", ""))
         elif event["event"] == "clarification":
