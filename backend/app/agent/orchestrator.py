@@ -496,6 +496,12 @@ class AgentOrchestrator:
                 tool_name = _strip_mcp_prefix(block.name)
                 tool_input = getattr(block, "input", {}) or {}
 
+                logger.info(
+                    "[sdk-event] tool_use: %s, input_keys=%s",
+                    tool_name,
+                    list(tool_input.keys()) if isinstance(tool_input, dict) else "?",
+                )
+
                 # Skip ToolSearch (internal SDK tool)
                 if block.name == "ToolSearch":
                     continue
@@ -571,17 +577,26 @@ class AgentOrchestrator:
 
         elif tool_name == "render_artifact":
             renderer = tool_input.get("type", "")
-            results.append({
-                "event": "artifact",
-                "data": {
-                    "id": f"art_{hash(tool_input.get('title', '')) % 100000:05d}",
-                    "renderer": renderer,
-                    "type": renderer,  # kept for backwards compat
-                    "title": tool_input.get("title", ""),
-                    "code": tool_input.get("code", ""),
-                    "source_pages": tool_input.get("source_pages", []),
-                },
-            })
+            code = tool_input.get("code", "")
+            title = tool_input.get("title", "")
+            logger.info(
+                "[artifact] type=%s, title=%s, code_length=%d",
+                renderer, title, len(code),
+            )
+            if code:
+                results.append({
+                    "event": "artifact",
+                    "data": {
+                        "id": f"art_{hash(title) % 100000:05d}",
+                        "renderer": renderer,
+                        "type": renderer,
+                        "title": title,
+                        "code": code,
+                        "source_pages": tool_input.get("source_pages", []),
+                    },
+                })
+            else:
+                logger.warning("[artifact] EMPTY code for %s, skipping", title)
 
         # Emit tool_end for all recognized tools
         results.append({

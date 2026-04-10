@@ -69,7 +69,14 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
         session=session,
         images=images_raw,
     ):
-        if event["event"] == "text_delta":
+        evt_type = event["event"]
+        # Log non-text events for debugging (text_delta is too noisy)
+        if evt_type != "text_delta":
+            logger.info("[sse] %s: %s", evt_type, {
+                k: (v[:80] + "..." if isinstance(v, str) and len(v) > 80 else v)
+                for k, v in event["data"].items()
+            })
+        if evt_type == "text_delta":
             assistant_chunks.append(event["data"].get("content", ""))
         elif event["event"] == "clarification":
             clarification_question = event["data"].get("question")
