@@ -8,18 +8,17 @@ A production-grade multimodal reasoning agent for the Vulcan OmniPro 220 welding
 git clone <repo>
 cd multimodal-prox-challenge
 cp .env.example .env   # Add your ANTHROPIC_API_KEY
-
-# Backend
-cd backend
-uv venv && uv pip install -e ".[dev]"
-uv run python run_server.py --port 8000
-
-# Frontend (new terminal)
-cd frontend
-npm install
-npm run dev
-
+make setup             # Install backend + frontend dependencies
+make backend           # Start backend (terminal 1)
+make frontend          # Start frontend (terminal 2)
 # Open http://localhost:3000
+```
+
+Or without Make:
+
+```bash
+cd backend && uv venv && uv pip install -e ".[dev]" && uv run python run_server.py
+cd frontend && npm install && npm run dev
 ```
 
 No Docker required. No database to install. SQLite is created automatically.
@@ -167,17 +166,17 @@ multimodal-prox-challenge/
 ## Testing
 
 ```bash
-# Unit tests (104 passing)
-cd backend && uv run pytest tests/ -v
+make test              # Unit tests (104 passing)
+make lint              # Backend + frontend lint
+make eval              # Full eval suite (16 live cases, needs API key)
+```
 
-# Lint
+Or without Make:
+
+```bash
+cd backend && uv run pytest tests/ -v
 cd backend && uv run ruff check app/ tests/
 cd frontend && npm run lint
-
-# Live API evaluation (requires ANTHROPIC_API_KEY)
-cd backend && uv run python scripts/test_live_agent.py
-
-# Full eval suite (16 live cases; exits non-zero on failures or needs review)
 cd backend && uv run python scripts/run_eval.py
 ```
 
