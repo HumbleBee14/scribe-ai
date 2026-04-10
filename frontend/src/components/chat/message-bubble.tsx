@@ -127,14 +127,6 @@ export function MessageBubble({
         {/* Tool calls: show only during streaming; collapse when done */}
         <ToolCallsSection toolCalls={message.toolCalls} isStreaming={!!message.isStreaming} />
 
-        {/* Thinking indicator: show while any tool call is still pending */}
-        {message.isStreaming && message.toolCalls?.some((t) => t.ok === undefined) && (
-          <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-neutral-500 py-1">
-            <Loader2 className="h-4 w-4 animate-spin text-orange-400" />
-            <span>Generating response...</span>
-          </div>
-        )}
-
         {/* Interleaved content blocks (text, artifacts, images in arrival order) */}
         {message.blocks && message.blocks.length > 0 ? (
           message.blocks.map((block, i) => (
@@ -198,24 +190,17 @@ export function MessageBubble({
           </div>
         )}
 
-        {/* Streaming indicator */}
-        {message.isStreaming && !message.content && (
-          <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-neutral-500">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Thinking...
+        {/* Generating indicator: at the bottom, while agent is still working */}
+        {message.isStreaming && (
+          <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-neutral-500 py-1">
+            <Loader2 className="h-4 w-4 animate-spin text-orange-400" />
+            <span>
+              {!message.content && !(message.toolCalls?.length)
+                ? "Thinking..."
+                : "Generating response..."}
+            </span>
           </div>
         )}
-
-        {!isUser &&
-          !message.pageImages?.length &&
-          !message.artifacts?.length &&
-          !message.content &&
-          !message.isStreaming && (
-            <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-neutral-500">
-              <ImageIcon className="h-3.5 w-3.5" />
-              No visual sources were returned for this answer.
-            </div>
-          )}
       </div>
     </div>
   );
