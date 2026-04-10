@@ -1,6 +1,7 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Expand, FileText, X } from "lucide-react";
 import type { ArtifactEvent, SourcePageRef } from "@/types/events";
 import { MermaidViewer } from "./mermaid-viewer";
 import { SVGViewer } from "./svg-viewer";
@@ -12,38 +13,56 @@ interface Props {
 }
 
 export function ArtifactRenderer({ artifact, onSelectSourcePage }: Props) {
-  // Use renderer field (canonical), fall back to type (backwards compat)
   const renderer = artifact.renderer || artifact.type || "";
   const { title, code, source_pages } = artifact;
+  const [zoomed, setZoomed] = useState(false);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!zoomed) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setZoomed(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [zoomed]);
+
+  const renderContent = (fullWidth?: boolean) => {
+    if (renderer === "mermaid") return <MermaidViewer code={code} title={fullWidth ? undefined : title} />;
+    if (renderer === "svg") return <SVGViewer code={code} title={fullWidth ? undefined : title} />;
+    if (renderer === "html" || renderer === "table") return <HTMLViewer code={code} title={fullWidth ? undefined : title} />;
+
+    return (
+      <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{title}</div>
+            <div className="mt-1 text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">{renderer}</div>
+          </div>
+          <FileText className="h-4 w-4 shrink-0 text-orange-500 dark:text-orange-400" />
+        </div>
+        <pre className="mt-3 overflow-x-auto rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 p-3 text-xs text-gray-700 dark:text-neutral-300">
+          <code>{code}</code>
+        </pre>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-2">
-      {/* Render based on renderer type */}
-      {renderer === "mermaid" && <MermaidViewer code={code} title={title} />}
+      {/* Inline artifact with expand button */}
+      <div className="relative group">
+        {renderContent()}
 
-      {renderer === "svg" && <SVGViewer code={code} title={title} />}
-
-      {(renderer === "html" || renderer === "table") && (
-        <HTMLViewer code={code} title={title} />
-      )}
-
-      {/* Fallback: show code block for unknown renderers */}
-      {!["mermaid", "svg", "html", "table"].includes(renderer) && (
-        <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{title}</div>
-              <div className="mt-1 text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">
-                {renderer}
-              </div>
-            </div>
-            <FileText className="h-4 w-4 shrink-0 text-orange-500 dark:text-orange-400" />
-          </div>
-          <pre className="mt-3 overflow-x-auto rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 p-3 text-xs text-gray-700 dark:text-neutral-300">
-            <code>{code}</code>
-          </pre>
-        </div>
-      )}
+        {/* Expand/zoom button */}
+        <button
+          onClick={() => setZoomed(true)}
+          className="absolute top-2 right-2 hidden group-hover:flex h-7 w-7 items-center justify-center rounded-lg bg-black/50 text-white hover:bg-black/70 transition-colors"
+          title="Expand artifact"
+        >
+          <Expand className="h-3.5 w-3.5" />
+        </button>
+      </div>
 
       {/* Source page links */}
       {source_pages.length > 0 && (
@@ -64,6 +83,38 @@ export function ArtifactRenderer({ artifact, onSelectSourcePage }: Props) {
               {source.description ? ` \u00B7 ${source.description}` : ""}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Zoom modal */}
+      {zoomed && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-8"
+          onClick={() => setZoomed(false)}
+        >
+          <div
+            className="relative w-full max-w-5xl max-h-[90vh] overflow-auto rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl border border-gray-200 dark:border-neutral-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-6 py-3 rounded-t-2xl">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{title}</h3>
+                <p className="text-xs text-gray-400 dark:text-neutral-500 uppercase">{renderer}</p>
+              </div>
+              <button
+                onClick={() => setZoomed(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Modal content */}
+            <div className="p-6">
+              {renderContent(true)}
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -127,6 +127,14 @@ export function MessageBubble({
         {/* Tool calls: show only during streaming; collapse when done */}
         <ToolCallsSection toolCalls={message.toolCalls} isStreaming={!!message.isStreaming} />
 
+        {/* Thinking indicator: show while tools run but no text yet */}
+        {message.isStreaming && !message.content && (message.toolCalls?.length ?? 0) > 0 && (
+          <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-neutral-500 py-1">
+            <Loader2 className="h-4 w-4 animate-spin text-orange-400" />
+            <span>Generating response...</span>
+          </div>
+        )}
+
         {/* Main text */}
         {message.content && (
           <div
