@@ -28,6 +28,15 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Preload Mermaid CDN so iframes render instantly (cached by browser) */}
+        <link
+          rel="preload"
+          href="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs"
+          as="script"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-[--background] text-[--foreground]">
         <ThemeProvider>{children}</ThemeProvider>
       </body>

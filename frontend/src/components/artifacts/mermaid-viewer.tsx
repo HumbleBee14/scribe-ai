@@ -9,15 +9,14 @@ interface Props {
 }
 
 /**
- * Renders Mermaid diagrams safely inside an iframe to avoid:
- * 1. React removeChild errors (Mermaid manipulates DOM directly)
- * 2. Mermaid error elements leaking into the page layout
- *
- * The iframe isolates Mermaid's DOM mutations from React entirely.
+ * Renders Mermaid diagrams in a sandboxed iframe with zoom/pan support.
+ * - Iframe isolates Mermaid DOM mutations from React
+ * - svg-pan-zoom provides zoom/scroll/drag on the rendered SVG
+ * - Mermaid v11 pinned via jsDelivr CDN
  */
 export function MermaidViewer({ code, title }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(300);
+  const [height, setHeight] = useState(400);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -26,111 +25,119 @@ export function MermaidViewer({ code, title }: Props) {
       if (event.source !== iframeRef.current.contentWindow) return;
       if (!event.data || typeof event.data !== "object") return;
 
-      if (event.data.type === "mermaid-resize" && typeof event.data.height === "number") {
-        setHeight(Math.min(Math.max(event.data.height + 20, 100), 800));
+      if (event.data.type === "mermaid-resize") {
+        setHeight(Math.min(Math.max(event.data.height + 40, 150), 800));
       }
-      if (event.data.type === "mermaid-error" && typeof event.data.message === "string") {
+      if (event.data.type === "mermaid-error") {
         setError(event.data.message);
       }
     };
-
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  // Sanitize Mermaid code: replace literal \n with newlines, strip problematic chars
+  // Sanitize: literal \n to newlines, strip control chars
   const cleanCode = code
     .replace(/\\n/g, "\n")
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
 
-  const iframeHtml = `
-<!DOCTYPE html>
+  // Escape for safe HTML embedding
+  const escaped = cleanCode.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const iframeHtml = `<!DOCTYPE html>
 <html>
 <head>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: transparent;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    min-height: 50px;
+  body { background: #0f172a; overflow: hidden; }
+  #viewport {
+    width: 100%; height: 100vh;
+    overflow: hidden; cursor: grab;
+    display: flex; align-items: center; justify-content: center;
   }
-  .mermaid svg { max-width: 100%; height: auto; }
-  .error-container {
-    color: #dc2626;
-    font-family: system-ui, sans-serif;
-    font-size: 13px;
-    padding: 12px;
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    border-radius: 8px;
-    max-width: 100%;
-    overflow: auto;
+  #viewport:active { cursor: grabbing; }
+  #canvas { transform-origin: 0 0; transition: none; }
+  #canvas svg { display: block; }
+  .error { color: #f87171; font: 13px system-ui; padding: 16px; }
+  .error pre { margin-top: 8px; font-size: 11px; color: #9ca3af; white-space: pre-wrap; }
+  .controls {
+    position: fixed; bottom: 8px; right: 8px; display: flex; gap: 4px;
+    font: 11px system-ui; z-index: 10;
   }
-  .error-container pre {
-    margin-top: 8px;
-    font-size: 11px;
-    color: #6b7280;
-    white-space: pre-wrap;
-    word-break: break-all;
+  .controls button {
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    color: #94a3b8; border-radius: 4px; width: 28px; height: 28px;
+    cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
   }
+  .controls button:hover { background: rgba(255,255,255,0.2); color: #fff; }
 </style>
 </head>
 <body>
-<div class="mermaid">${cleanCode.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+<div id="viewport"><div id="canvas"><pre class="mermaid">${escaped}</pre></div></div>
+<div class="controls">
+  <button id="zin" title="Zoom in">+</button>
+  <button id="zout" title="Zoom out">-</button>
+  <button id="zreset" title="Reset">R</button>
+</div>
 <script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs';
 
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: 'dark',
-    themeVariables: {
-      primaryColor: '#f97316',
-      primaryTextColor: '#fff',
-      primaryBorderColor: '#f97316',
-      lineColor: '#666',
-      secondaryColor: '#1a1a2e',
-      tertiaryColor: '#2a2a3e',
-      background: '#0f172a',
-      mainBkg: '#1a1a2e',
-      nodeBorder: '#f97316',
-      titleColor: '#fff',
-    },
-    fontFamily: 'system-ui, sans-serif',
-    fontSize: 13,
-    securityLevel: 'loose',
-  });
+mermaid.initialize({
+  startOnLoad: false, theme: 'dark',
+  themeVariables: {
+    primaryColor: '#f97316', primaryTextColor: '#fff', primaryBorderColor: '#f97316',
+    lineColor: '#94a3b8', secondaryColor: '#1e293b', tertiaryColor: '#334155',
+    background: '#0f172a', mainBkg: '#1e293b', nodeBorder: '#f97316', titleColor: '#fff',
+  },
+  fontFamily: 'system-ui, sans-serif', fontSize: 13, securityLevel: 'loose',
+});
 
-  try {
-    const el = document.querySelector('.mermaid');
-    const { svg } = await mermaid.render('mermaid-diagram', el.textContent);
-    el.innerHTML = svg;
-    // Report height to parent
-    requestAnimationFrame(() => {
-      window.parent.postMessage(
-        { type: 'mermaid-resize', height: document.body.scrollHeight },
-        '*'
-      );
-    });
-  } catch (err) {
-    const el = document.querySelector('.mermaid');
-    el.innerHTML = '<div class="error-container">'
-      + '<strong>Failed to render Mermaid diagram</strong>'
-      + '<pre>' + (err.message || err) + '</pre>'
-      + '</div>';
-    window.parent.postMessage(
-      { type: 'mermaid-error', message: err.message || String(err) },
-      '*'
-    );
-    requestAnimationFrame(() => {
-      window.parent.postMessage(
-        { type: 'mermaid-resize', height: document.body.scrollHeight },
-        '*'
-      );
-    });
+try {
+  const el = document.querySelector('.mermaid');
+  const { svg } = await mermaid.render('diagram', el.textContent);
+  const canvas = document.getElementById('canvas');
+  canvas.innerHTML = svg;
+
+  const svgEl = canvas.querySelector('svg');
+  const h = svgEl ? svgEl.getBoundingClientRect().height : canvas.scrollHeight;
+  window.parent.postMessage({ type: 'mermaid-resize', height: Math.ceil(h) }, '*');
+
+  // Pan and zoom state
+  let scale = 1, panX = 0, panY = 0, dragging = false, startX = 0, startY = 0;
+  const viewport = document.getElementById('viewport');
+
+  function applyTransform() {
+    canvas.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + scale + ')';
   }
+
+  viewport.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.max(0.2, Math.min(5, scale * delta));
+    // Zoom toward cursor
+    const rect = viewport.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    panX = mx - (mx - panX) * (newScale / scale);
+    panY = my - (my - panY) * (newScale / scale);
+    scale = newScale;
+    applyTransform();
+  }, { passive: false });
+
+  viewport.addEventListener('mousedown', (e) => { dragging = true; startX = e.clientX - panX; startY = e.clientY - panY; });
+  viewport.addEventListener('mousemove', (e) => { if (!dragging) return; panX = e.clientX - startX; panY = e.clientY - startY; applyTransform(); });
+  viewport.addEventListener('mouseup', () => { dragging = false; });
+  viewport.addEventListener('mouseleave', () => { dragging = false; });
+
+  document.getElementById('zin').addEventListener('click', () => { scale = Math.min(5, scale * 1.3); applyTransform(); });
+  document.getElementById('zout').addEventListener('click', () => { scale = Math.max(0.2, scale * 0.7); applyTransform(); });
+  document.getElementById('zreset').addEventListener('click', () => { scale = 1; panX = 0; panY = 0; applyTransform(); });
+
+} catch (err) {
+  document.getElementById('canvas').innerHTML =
+    '<div class="error"><strong>Diagram render failed</strong><pre>' + (err.message || err) + '</pre></div>';
+  window.parent.postMessage({ type: 'mermaid-error', message: err.message || String(err) }, '*');
+  window.parent.postMessage({ type: 'mermaid-resize', height: document.body.scrollHeight }, '*');
+}
 </script>
 </body>
 </html>`;
@@ -161,7 +168,7 @@ export function MermaidViewer({ code, title }: Props) {
           sandbox="allow-scripts"
           srcDoc={iframeHtml}
           className="w-full border-0"
-          style={{ height: `${height}px`, background: "transparent" }}
+          style={{ height: `${height}px` }}
           title={title || "Mermaid diagram"}
         />
       )}
