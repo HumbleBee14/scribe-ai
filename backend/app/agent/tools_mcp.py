@@ -218,7 +218,7 @@ async def mcp_clarify_question(args: dict[str, Any]) -> dict[str, Any]:
         "properties": {
             "page": {
                 "type": "integer",
-                "description": "Page number (1-48)",
+                "description": "Page number from the manual",
             },
         },
         "required": ["page"],

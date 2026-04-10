@@ -19,6 +19,65 @@ import { buildBackendUrl } from "@/lib/api";
 import { ArtifactRenderer } from "@/components/artifacts/artifact-renderer";
 import type { ChatMessage, ContentBlock, SelectedSourcePage } from "@/types/events";
 
+/**
+ * Auto-link page references in chat text.
+ * Matches: "page 14", "pages 13-14", "Page 24", "p.14", "p. 14", "manual page 14"
+ * Works for any page number (no hardcoded range). The source viewer
+ * handles missing pages gracefully.
+ */
+const PAGE_REF_REGEX = /\b(?:manual\s+)?(?:pages?\s*\.?\s*)(\d{1,3})(?:\s*[-\u2013]\s*(\d{1,3}))?\b/gi;
+
+function linkifyPageRefs(
+  children: React.ReactNode,
+  onSelect?: (source: SelectedSourcePage) => void,
+): React.ReactNode {
+  if (!onSelect) return children;
+  return processChildren(children, (text) => {
+    const parts: React.ReactNode[] = [];
+    let lastIdx = 0;
+    let match: RegExpExecArray | null;
+    const regex = new RegExp(PAGE_REF_REGEX.source, "gi");
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        parts.push(text.slice(lastIdx, match.index));
+      }
+      const page = parseInt(match[1], 10);
+      const fullMatch = match[0];
+      if (page >= 1) {
+        parts.push(
+          <button
+            key={`pref-${match.index}`}
+            type="button"
+            onClick={() => onSelect({ page, title: `Page ${page}` })}
+            className="inline text-orange-500 hover:text-orange-600 underline underline-offset-2 cursor-pointer"
+          >
+            {fullMatch}
+          </button>,
+        );
+      } else {
+        parts.push(fullMatch);
+      }
+      lastIdx = regex.lastIndex;
+    }
+    if (lastIdx < text.length) parts.push(text.slice(lastIdx));
+    return parts.length > 0 ? parts : text;
+  });
+}
+
+function processChildren(
+  children: React.ReactNode,
+  transform: (text: string) => React.ReactNode,
+): React.ReactNode {
+  if (typeof children === "string") return transform(children);
+  if (Array.isArray(children)) {
+    return children.map((child, i) => {
+      if (typeof child === "string") return <span key={i}>{transform(child)}</span>;
+      return child;
+    });
+  }
+  return children;
+}
+
 interface Props {
   message: ChatMessage;
   onQuickReply?: (message: string) => void;
@@ -231,7 +290,18 @@ function InlineBlock({
         }`}
       >
         <div className={`chat-prose ${isUser ? "chat-prose-user" : ""}`}>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              // Auto-link page references in text nodes
+              p: ({ children }) => <p>{linkifyPageRefs(children, onSelectSourcePage)}</p>,
+              li: ({ children }) => <li>{linkifyPageRefs(children, onSelectSourcePage)}</li>,
+              strong: ({ children }) => <strong>{linkifyPageRefs(children, onSelectSourcePage)}</strong>,
+              em: ({ children }) => <em>{linkifyPageRefs(children, onSelectSourcePage)}</em>,
+            }}
+          >
+            {block.text}
+          </ReactMarkdown>
         </div>
       </div>
     );

@@ -176,7 +176,7 @@ TOOL_DEFINITIONS: list[dict] = [
             "properties": {
                 "page": {
                     "type": "integer",
-                    "description": "Page number (1-48)",
+                    "description": "Page number from the manual",
                 },
             },
             "required": ["page"],
@@ -412,8 +412,8 @@ def _execute_uncached(name: str, params: dict) -> dict:
 
     if name == "get_page_image":
         page = params["page"]
-        if not 1 <= page <= 48:
-            return {"error": f"Invalid page number: {page}. Must be 1-48."}
+        if page < 1:
+            return {"error": f"Invalid page number: {page}. Must be >= 1."}
         return {
             "page": page,
             "image_url": f"/assets/images/page_{page:02d}.png",
