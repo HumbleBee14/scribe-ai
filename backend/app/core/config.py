@@ -33,7 +33,6 @@ class Settings(BaseSettings):
     files_dir: str = str(FILES_DIR)
 
     # Feature flags
-    full_context_mode: bool = True
     enable_vector_search: bool = False
 
     model_config = SettingsConfigDict(

@@ -94,11 +94,7 @@ def build_system_prompt(
     session_context: str = "",
     manual_path: str = "",
 ) -> str:
-    """Build the full system prompt for Agent SDK (single string).
-
-    For the Anthropic client path, use build_system_prompt_blocks() instead
-    to get proper cache control separation.
-    """
+    """Build the full system prompt for the Claude Agent SDK."""
     parts = [STATIC_SYSTEM_PROMPT]
     if manual_path:
         parts.append(
@@ -110,40 +106,3 @@ def build_system_prompt(
     if session_context:
         parts.append(f"\n## Current session context\n{session_context}\n")
     return "".join(parts)
-
-
-def build_system_prompt_blocks(
-    session_context: str = "",
-    manual_path: str = "",
-) -> list[dict]:
-    """Build system prompt as separate blocks for Anthropic prompt caching.
-
-    Static rules are cached (don't change between requests).
-    Dynamic session context is a separate uncached block.
-    """
-    # Static block: persona + rules (cacheable)
-    static_text = STATIC_SYSTEM_PROMPT
-    if manual_path:
-        static_text += (
-            f"\n## Manual file reference\n"
-            f"The product manual is available at: {manual_path}\n"
-            f"You can use the Read tool to look up any information from the manual "
-            f"when your specialized lookup tools don't cover the question.\n"
-        )
-
-    blocks: list[dict] = [
-        {
-            "type": "text",
-            "text": static_text,
-            "cache_control": {"type": "ephemeral"},
-        }
-    ]
-
-    # Dynamic block: session context (changes per request, not cached)
-    if session_context:
-        blocks.append({
-            "type": "text",
-            "text": f"\n## Current session context\n{session_context}\n",
-        })
-
-    return blocks

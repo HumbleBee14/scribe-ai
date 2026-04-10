@@ -1,6 +1,6 @@
 # Vulcan OmniPro 220 Multimodal Agent
 
-A production-grade multimodal reasoning agent for the Vulcan OmniPro 220 welding system with a zero-setup local runtime and an optional Claude Agent SDK path when the local Claude CLI is available.
+A production-grade multimodal reasoning agent for the Vulcan OmniPro 220 welding system built directly on the Claude Agent SDK with an MCP-backed knowledge engine.
 
 ## Quickstart
 
@@ -40,27 +40,26 @@ Ask it anything about the Vulcan OmniPro 220 and it will:
 ```
 Frontend (Next.js 16)          Backend (Python FastAPI)
 +------------------+           +-------------------------------+
-| Chat UI          |   SSE     | Anthropic tool loop          |
-| Artifact viewers | <-------> | (default local runtime)      |
-| Session sidebar  |           | Optional Agent SDK path      |
-| Image upload     |           | when Claude CLI is present   |
+| Chat UI          |   SSE     | Claude Agent SDK runtime     |
+| Artifact viewers | <-------> | + MCP welding knowledge      |
+| Session sidebar  |           | + Built-in Read tool         |
+| Image upload     |           | + Streaming event mapper     |
 +------------------+           |                               |
                                | Knowledge Engine:            |
                                | - Structured JSON            |
                                | - BM25 retrieval             |
-                               | - Full-context PDF injection |
                                | - Validation module          |
                                +-------------------------------+
 ```
 
 ### Runtime Strategy
 
-The app defaults to the raw Anthropic Messages API tool loop so evaluators only need an API key. When the local Claude CLI is available, the codebase can also use the Claude Agent SDK path for experimentation and parity checks.
+The backend uses the Claude Agent SDK as the single orchestration runtime. Product-specific capabilities are exposed as MCP tools, and the SDK's built-in `Read` tool handles broader manual access.
 
-Why this split exists:
-- The web app must run locally with a single API key and no extra CLI dependency.
-- `claude-agent-sdk` depends on the local Claude CLI transport, which is not guaranteed in evaluator environments.
-- The Anthropic client path preserves the same tool contracts, SSE UX, multimodal image input, and session behavior without that setup burden.
+Why this design:
+- One orchestration stack is easier to reason about, test, and extend.
+- MCP tools preserve exact-data lookups and deterministic validation.
+- The SDK provides native sessions, partial streaming events, and prompt-caching benefits without maintaining a second custom tool loop.
 
 ### Knowledge Engine: Three Retrieval Paths
 
@@ -77,10 +76,10 @@ Why this split exists:
 - Sentence-level compression (~60% token savings)
 - Exact-tool precedence enforced: duty cycle/polarity queries redirect to exact tools
 
-**Path 3: Full-context PDF injection** (broad manual access)
-- The full owner manual PDF is injected directly into the first user turn
-- Claude receives the manual with citations-enabled document context
+**Path 3: Built-in Read access** (broad manual access)
+- The Claude Agent SDK reads targeted portions of the owner manual on demand
 - Supplements (does not replace) exact-data tools
+- Keeps broad-question retrieval inside the same SDK runtime and tool loop
 
 ### Artifact System
 
@@ -115,8 +114,8 @@ Every answer is backed by typed evidence:
 
 ## Design Decisions
 
-### Why raw Anthropic runtime by default?
-The challenge wants agentic behavior, but evaluators also need a zero-friction setup. The raw Anthropic tool loop is the most reliable local runtime because it only needs the API key. The repository still includes the Agent SDK path for environments where the Claude CLI transport is available.
+### Why Claude Agent SDK as the only runtime?
+The challenge explicitly asks for the Anthropic Claude Agent SDK, and using it directly keeps the product aligned with that requirement. A single runtime also avoids maintaining duplicate orchestration logic for tools, multimodal input, streaming, and session handling.
 
 ### Why structured JSON for exact data?
 The challenge tests exact technical values. "What's the duty cycle for MIG at 200A on 240V?" must return exactly "25%". Semantic search over text chunks risks returning paraphrased or adjacent values. Pre-verified JSON with deterministic validation ensures exact answers.
@@ -138,7 +137,7 @@ multimodal-prox-challenge/
     app/
       agent/         # Orchestrator, tools, MCP wrappers, system prompt
       api/           # FastAPI routes (chat streaming, session)
-      knowledge/     # Evidence model, structured store, full-context
+      knowledge/     # Evidence model and structured store
       retrieval/     # BM25 search, query profiles, compression
       session/       # Session manager (process/voltage/material tracking)
       validation/    # Deterministic answer validation
@@ -194,8 +193,7 @@ The architecture is designed as a reusable document-intelligence platform:
 
 | Layer | Technology |
 |-------|-----------|
-| Agent runtime | Anthropic Messages API tool loop |
-| Optional agent path | Claude Agent SDK (`claude-agent-sdk`) |
+| Agent runtime | Claude Agent SDK (`claude-agent-sdk`) |
 | Model | Claude Sonnet 4.6 |
 | Backend | Python, FastAPI, Pydantic |
 | Frontend | Next.js 16, TypeScript, React 19, Tailwind CSS |
