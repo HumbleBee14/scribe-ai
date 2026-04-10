@@ -87,7 +87,7 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
   };
 
   return (
-    <div className="border-t border-gray-200 bg-white p-4">
+    <div className="p-4">
       {/* Pending image previews */}
       {pendingImages.length > 0 && (
         <div className="mb-3 flex gap-3 overflow-x-auto pb-1 pt-2 px-1">
@@ -150,7 +150,7 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
       <div className="flex items-end gap-2">
         <button
           onClick={() => fileRef.current?.click()}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"
           title="Upload or paste an image (weld photo, machine setup)"
         >
           <ImagePlus className="h-5 w-5" />
@@ -170,7 +170,7 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
           onPaste={handlePaste}
           placeholder="Ask about the Vulcan OmniPro 220... (paste images with Ctrl+V)"
           rows={1}
-          className="flex-1 resize-none rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+          className="flex-1 resize-none rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-4 py-2.5 text-sm text-gray-900 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-500 focus:border-orange-400 dark:focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-900"
           disabled={disabled && !isStreaming}
         />
 
