@@ -11,10 +11,10 @@ export function SessionSidebar({ session }: Props) {
   if (!session) {
     return (
       <div className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-500">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
           Session Context
         </h3>
-        <p className="text-xs text-gray-400 dark:text-neutral-500">
+        <p className="text-xs text-gray-400 dark:text-neutral-400">
           Start a conversation and the assistant will track your current process,
           voltage, material, and setup state here.
         </p>
@@ -51,23 +51,23 @@ export function SessionSidebar({ session }: Props) {
 
   return (
     <div className="space-y-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-500">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
         Session Context
       </h3>
       {items.map((item) => (
         <div key={item.label} className="flex items-center gap-2">
           <item.icon
             className={`h-4 w-4 ${
-              item.active ? "text-orange-500 dark:text-orange-400" : "text-gray-300 dark:text-neutral-600"
+              item.active ? "text-orange-500 dark:text-orange-400" : "text-gray-300 dark:text-neutral-500"
             }`}
           />
           <div className="min-w-0">
-            <div className="text-[10px] uppercase text-gray-500 dark:text-neutral-500">
+            <div className="text-[10px] uppercase text-gray-500 dark:text-neutral-400">
               {item.label}
             </div>
             <div
               className={`text-xs truncate ${
-                item.active ? "text-gray-900 dark:text-neutral-200" : "text-gray-400 dark:text-neutral-600"
+                item.active ? "text-gray-900 dark:text-neutral-200" : "text-gray-400 dark:text-neutral-500"
               }`}
             >
               {item.value}
@@ -78,7 +78,7 @@ export function SessionSidebar({ session }: Props) {
 
       {session.setupStepsCompleted.length > 0 && (
         <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3">
-          <div className="text-[10px] uppercase text-gray-500 dark:text-neutral-500">Setup Steps</div>
+          <div className="text-[10px] uppercase text-gray-500 dark:text-neutral-400">Setup Steps</div>
           <div className="mt-2 flex flex-wrap gap-2">
             {session.setupStepsCompleted.map((step) => (
               <span
@@ -94,7 +94,7 @@ export function SessionSidebar({ session }: Props) {
 
       {session.safetyWarningsShown.length > 0 && (
         <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3">
-          <div className="text-[10px] uppercase text-gray-500 dark:text-neutral-500">Safety Topics</div>
+          <div className="text-[10px] uppercase text-gray-500 dark:text-neutral-400">Safety Topics</div>
           <div className="mt-2 flex flex-wrap gap-2">
             {session.safetyWarningsShown.map((warning) => (
               <span

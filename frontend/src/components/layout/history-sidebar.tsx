@@ -44,17 +44,17 @@ export function HistorySidebar({ activeId, onSelect, onNew, onCollapse }: Props)
   };
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
+    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-800 px-3 py-2.5">
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-700 px-3 py-2.5">
         <button
           onClick={onCollapse}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 dark:text-neutral-500 hover:bg-gray-100 dark:hover:bg-neutral-800 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
           title="Hide history"
         >
           <PanelLeftClose className="h-4 w-4" />
         </button>
-        <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500">
+        <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-400">
           History
         </span>
         <button
@@ -70,7 +70,7 @@ export function HistorySidebar({ activeId, onSelect, onNew, onCollapse }: Props)
       {/* Conversation list */}
       <div className="flex-1 overflow-y-auto py-2">
         {conversations.length === 0 ? (
-          <div className="px-4 py-6 text-center text-xs text-gray-400 dark:text-neutral-600">
+          <div className="px-4 py-6 text-center text-xs text-gray-400 dark:text-neutral-400">
             No conversations yet.
             <br />
             Start chatting!
@@ -119,7 +119,7 @@ function ConversationRow({
       <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-50" />
       <div className="min-w-0 flex-1">
         <EditableTitle conv={conv} editing={editing} onRename={onRename} onEditDone={() => setEditing(false)} />
-        <div className="text-[10px] text-gray-400 dark:text-neutral-500">
+        <div className="text-[10px] text-gray-400 dark:text-neutral-400">
           {conv.messageCount} {conv.messageCount === 1 ? "message" : "messages"}
         </div>
       </div>
@@ -127,14 +127,14 @@ function ConversationRow({
         <div className="mt-0.5 hidden shrink-0 items-center gap-1 group-hover:flex">
           <button
             onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-            className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:text-gray-600 dark:text-neutral-500 dark:hover:text-neutral-300"
+            className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300"
             title="Rename"
           >
             <Pencil className="h-3 w-3" />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:text-red-500 dark:text-neutral-500 dark:hover:text-red-400"
+            className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:text-red-500 dark:text-neutral-400 dark:hover:text-red-400"
             title="Delete"
           >
             <Trash2 className="h-3 w-3" />

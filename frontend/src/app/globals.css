@@ -19,10 +19,10 @@
 .dark {
   --background: #0a0a0a;
   --foreground: #ededed;
-  --surface: #111111;
+  --surface: #171717;
   --surface-2: #1a1a1a;
-  --border: #2d2d2d;
-  --muted: #737373;
+  --border: #404040;
+  --muted: #a3a3a3;
 }
 
 @theme inline {
@@ -171,9 +171,6 @@ body {
 .chat-prose tr:nth-child(even) { background: #f9fafb; }
 .dark .chat-prose tr:nth-child(even) { background: #0d0d0d; }
 
-/* User bubble: invert colors */
-.chat-prose-user { color: #fff; }
-.chat-prose-user strong { color: #fff; }
-.chat-prose-user a { color: #fed7aa; }
-.chat-prose-user hr { border-color: rgba(255,255,255,0.25); }
-.chat-prose-user code { background: rgba(255,255,255,0.2); }
+/* User bubble */
+.chat-prose-user a { color: var(--accent); }
+.chat-prose-user code { background: rgba(249, 115, 22, 0.15); }

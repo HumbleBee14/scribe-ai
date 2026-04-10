@@ -128,7 +128,7 @@ export function MessageBubble({
       {/* Avatar */}
       <div
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-          isUser ? "bg-orange-500" : "bg-gray-200 dark:bg-neutral-700"
+          isUser ? "bg-orange-500" : "bg-slate-600 dark:bg-slate-500"
         }`}
       >
         {isUser ? (
@@ -139,7 +139,7 @@ export function MessageBubble({
       </div>
 
       {/* Content */}
-      <div className={`flex max-w-[75%] flex-col gap-2 ${isUser ? "items-end" : ""}`}>
+      <div className={`flex max-w-[85%] flex-col gap-2 ${isUser ? "items-end" : ""}`}>
         {/* Uploaded user images: compact inline row, click to expand */}
         {message.images && message.images.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -227,8 +227,8 @@ export function MessageBubble({
               <div
                 className={`rounded-2xl px-4 py-3 ${
                   isUser
-                    ? "bg-orange-500 text-white"
-                    : "bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 border border-gray-200 dark:border-neutral-700"
+                    ? "rounded-br-none bg-orange-100 dark:bg-orange-950/50 text-gray-800 dark:text-orange-100 border border-orange-200 dark:border-orange-800/60"
+                    : "rounded-bl-none bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 border border-gray-200 dark:border-neutral-700"
                 }`}
               >
                 <div className={`chat-prose ${isUser ? "chat-prose-user" : ""}`}>
@@ -276,7 +276,7 @@ export function MessageBubble({
 
         {/* Generating indicator: at the bottom, while agent is still working */}
         {message.isStreaming && (
-          <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-neutral-500 py-1">
+          <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-neutral-400 py-1">
             <Loader2 className="h-4 w-4 animate-spin text-orange-400" />
             <span>
               {!message.content && !(message.toolCalls?.length)
@@ -464,7 +464,7 @@ function TextBubble({
   // User messages: orange bubble. Assistant messages: no container, text flows naturally.
   if (isUser) {
     return (
-      <div className="rounded-2xl px-4 py-3 bg-orange-500 text-white">
+      <div className="rounded-2xl rounded-br-none px-4 py-3 bg-orange-100 dark:bg-orange-950/50 text-gray-800 dark:text-orange-100 border border-orange-200 dark:border-orange-800/60">
         <div className="chat-prose chat-prose-user">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
         </div>
@@ -511,7 +511,7 @@ function ArtifactLoadingPlaceholder({
             <div className="text-sm font-medium text-gray-700 dark:text-neutral-300">
               Generating {title || type || "artifact"}...
             </div>
-            <div className="text-xs text-gray-400 dark:text-neutral-500 mt-0.5">
+            <div className="text-xs text-gray-400 dark:text-neutral-400 mt-0.5">
               {type.toUpperCase()}{charCount > 0 ? ` \u00B7 ${charCount} chars received` : ""}
             </div>
           </div>
@@ -519,7 +519,7 @@ function ArtifactLoadingPlaceholder({
         {charCount > 0 && (
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="text-xs text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 flex items-center gap-1"
+            className="text-xs text-gray-400 dark:text-neutral-400 hover:text-gray-600 dark:hover:text-neutral-300 flex items-center gap-1"
           >
             <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
             {expanded ? "Hide" : "Show"} stream
@@ -695,7 +695,7 @@ function ToolCallsSection({
     return (
       <div className="flex flex-col gap-1">
         {visible.map((tc, i) => (
-          <div key={i} className="flex items-center gap-2 text-xs text-gray-400 dark:text-neutral-500">
+          <div key={i} className="flex items-center gap-2 text-xs text-gray-400 dark:text-neutral-400">
             {tc.ok === undefined ? (
               <Loader2 className="h-3 w-3 animate-spin text-orange-400" />
             ) : (
@@ -719,7 +719,7 @@ function ToolCallsSection({
     <div className="text-xs">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1.5 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 transition-colors"
+        className="flex items-center gap-1.5 text-gray-400 dark:text-neutral-400 hover:text-gray-600 dark:hover:text-neutral-300 transition-colors"
       >
         <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
         <span>{summary}</span>
@@ -731,7 +731,7 @@ function ToolCallsSection({
       {expanded && (
         <div className="mt-1.5 ml-1 flex flex-col gap-1 border-l-2 border-gray-100 dark:border-neutral-800 pl-3">
           {calls.map((tc, i) => (
-            <div key={i} className="flex items-center gap-2 text-gray-400 dark:text-neutral-500">
+            <div key={i} className="flex items-center gap-2 text-gray-400 dark:text-neutral-400">
               <CheckCircle className="h-2.5 w-2.5 text-green-500 shrink-0" />
               <span>{tc.label}</span>
             </div>

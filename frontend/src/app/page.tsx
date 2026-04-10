@@ -78,7 +78,7 @@ export default function Home() {
       {/* Center: Chat */}
       <div className="flex flex-1 flex-col min-w-0">
         {/* Header */}
-        <header className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-5 py-3 shrink-0">
+        <header className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-5 py-3 shrink-0">
           <div className="flex items-center gap-3">
             {!historyOpen && (
               <button
@@ -107,7 +107,7 @@ export default function Home() {
           {messages.length === 0 ? (
             <WelcomeScreen onQuickAction={(msg) => handleSend(msg)} />
           ) : (
-            <div className="space-y-6 px-6 py-4 max-w-5xl mx-auto">
+            <div className="space-y-6 px-6 py-4 max-w-6xl mx-auto">
               {messages.map((msg) => (
                 <MessageBubble
                   key={msg.id}
@@ -122,8 +122,8 @@ export default function Home() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
-          <div className="max-w-5xl mx-auto">
+        <div className="border-t border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
+          <div className="max-w-6xl mx-auto">
             <ChatInput
               onSend={handleSend}
               onStop={stopStreaming}
@@ -135,7 +135,7 @@ export default function Home() {
       </div>
 
       {/* Right: Context sidebar */}
-      <aside className="hidden w-72 shrink-0 border-l border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 lg:flex flex-col">
+      <aside className="hidden w-72 shrink-0 border-l border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 lg:flex flex-col">
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
           <SessionSidebar session={session} />
           <SourceViewer selectedSource={selectedSource} artifacts={artifacts} />

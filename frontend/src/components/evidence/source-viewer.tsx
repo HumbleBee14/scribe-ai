@@ -15,10 +15,10 @@ export function SourceViewer({ selectedSource, artifacts }: Props) {
   return (
     <div className="mt-6 space-y-4">
       <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-500">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
           Source Viewer
         </h3>
-        <p className="mt-2 text-xs text-gray-400 dark:text-neutral-500">
+        <p className="mt-2 text-xs text-gray-400 dark:text-neutral-400">
           Select a cited page from a message to preview it here.
         </p>
       </div>
@@ -26,17 +26,17 @@ export function SourceViewer({ selectedSource, artifacts }: Props) {
       {selectedSource ? (
         <SourceCard source={selectedSource} />
       ) : (
-        <div className="rounded-xl border border-dashed border-gray-200 dark:border-neutral-700 bg-gray-50/40 dark:bg-neutral-900/40 p-4 text-sm text-gray-400 dark:text-neutral-500">
+        <div className="rounded-xl border border-dashed border-gray-200 dark:border-neutral-700 bg-gray-50/40 dark:bg-neutral-900/40 p-4 text-sm text-gray-400 dark:text-neutral-400">
           No source selected yet.
         </div>
       )}
 
       <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-500">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
           Artifacts
         </h3>
         {artifacts.length === 0 ? (
-          <p className="mt-2 text-xs text-gray-400 dark:text-neutral-500">
+          <p className="mt-2 text-xs text-gray-400 dark:text-neutral-400">
             Artifacts will appear here once the assistant generates visuals.
           </p>
         ) : (
@@ -168,12 +168,12 @@ function DocumentPreviewModal({
               {title}
             </h3>
             {subtitle && (
-              <p className="text-xs text-gray-400 dark:text-neutral-500 truncate">{subtitle}</p>
+              <p className="text-xs text-gray-400 dark:text-neutral-400 truncate">{subtitle}</p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
@@ -225,7 +225,7 @@ function SidebarArtifactList({ artifacts }: { artifacts: ArtifactEvent["data"][]
               <FileImage className="h-4 w-4 text-orange-500 dark:text-orange-400 shrink-0" />
               <span className="truncate">{artifact.title}</span>
             </div>
-            <div className="mt-1 text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">
+            <div className="mt-1 text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-400">
               {artifact.renderer || artifact.type}
             </div>
             {artifact.source_pages.length > 0 && (
