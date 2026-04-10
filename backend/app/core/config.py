@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     files_dir: str = str(FILES_DIR)
     products_dir: str = str(PRODUCTS_DIR)
     default_product_id: str = "vulcan-omnipro-220"
+    max_documents_per_product: int = 10
 
     # Feature flags
     enable_vector_search: bool = False

@@ -18,6 +18,13 @@ export function getManualPageImageUrl(
   );
 }
 
+export interface ProductSourceSummary {
+  id: string;
+  type: string;
+  label: string;
+  pages?: number | null;
+}
+
 export interface ProductSummary {
   id: string;
   name: string;
@@ -29,6 +36,9 @@ export interface ProductSummary {
   status: string;
   seeded: boolean;
   primary_source_id?: string | null;
+  document_count: number;
+  max_documents: number;
+  sources: ProductSourceSummary[];
   processes: string[];
   voltages: string[];
   quick_actions: Array<{ label: string; message: string }>;
@@ -124,6 +134,14 @@ export async function fetchProducts(): Promise<{
   return res.json();
 }
 
+export async function fetchProduct(productId: string): Promise<ProductSummary> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}`));
+  if (!res.ok) {
+    throw new Error(`Product API error: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export async function createProduct(name: string, description: string): Promise<ProductSummary> {
   const res = await fetch(buildBackendUrl("/api/products"), {
     method: "POST",
@@ -150,6 +168,42 @@ export async function uploadProductDocuments(
   });
   if (!res.ok) {
     throw new Error(`Upload failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function replaceProductDocument(
+  productId: string,
+  sourceId: string,
+  file: File,
+  sourceType = "manual"
+): Promise<ProductSummary> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("source_type", sourceType);
+  const res = await fetch(
+    buildBackendUrl(`/api/products/${productId}/documents/${sourceId}/replace`),
+    {
+      method: "POST",
+      body: form,
+    }
+  );
+  if (!res.ok) {
+    throw new Error(`Replace failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function deleteProductDocument(
+  productId: string,
+  sourceId: string
+): Promise<ProductSummary> {
+  const res = await fetch(
+    buildBackendUrl(`/api/products/${productId}/documents/${sourceId}`),
+    { method: "DELETE" }
+  );
+  if (!res.ok) {
+    throw new Error(`Delete failed: ${res.status} ${res.statusText}`);
   }
   return res.json();
 }

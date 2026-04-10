@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Uploa
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from app.core.config import settings
 from app.ingest.jobs import enqueue_ingestion
 from app.packs.registry import get_product_registry
 
@@ -38,6 +39,8 @@ def _serialize_product(product_id: str) -> dict[str, object]:
         "voltages": runtime.voltages,
         "seeded": runtime.seeded,
         "primary_source_id": runtime.primary_source_id,
+        "document_count": len(runtime.manifest.sources),
+        "max_documents": settings.max_documents_per_product,
         "sources": [
             {
                 "id": source.id,
@@ -96,14 +99,50 @@ async def upload_product_documents(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    for upload in files:
-        content = await upload.read()
-        registry.add_source_document(
+    try:
+        for upload in files:
+            content = await upload.read()
+            registry.add_source_document(
+                product_id,
+                filename=upload.filename or "document.pdf",
+                content=content,
+                source_type=source_type,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _serialize_product(product_id)
+
+
+@router.post("/{product_id}/documents/{source_id}/replace")
+async def replace_product_document(
+    product_id: str,
+    source_id: str,
+    file: UploadFile = File(...),
+    source_type: str = Form("manual"),
+) -> dict[str, object]:
+    registry = get_product_registry()
+    try:
+        registry.require_product(product_id)
+        content = await file.read()
+        registry.replace_source_document(
             product_id,
-            filename=upload.filename or "document.pdf",
+            source_id=source_id,
+            filename=file.filename or "document.pdf",
             content=content,
             source_type=source_type,
         )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_product(product_id)
+
+
+@router.delete("/{product_id}/documents/{source_id}")
+def delete_product_document(product_id: str, source_id: str) -> dict[str, object]:
+    registry = get_product_registry()
+    try:
+        registry.remove_source_document(product_id, source_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _serialize_product(product_id)
 
 

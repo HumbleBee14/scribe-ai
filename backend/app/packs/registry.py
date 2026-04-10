@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from pathlib import Path
@@ -155,6 +156,79 @@ class ProductRegistry:
         self._cache.pop(product_id, None)
         return self.require_product(product_id)
 
+    def _storage_root(self, runtime: ProductRuntime) -> Path:
+        if runtime.seeded:
+            return self._user_dir / runtime.id
+        return runtime.root_dir
+
+    def _write_manifest(self, runtime: ProductRuntime, manifest: dict) -> None:
+        runtime.manifest_path.write_text(
+            yaml.safe_dump(manifest, sort_keys=False),
+            encoding="utf-8",
+        )
+        self._cache.pop(runtime.id, None)
+
+    def _source_dir(self, runtime: ProductRuntime, source_id: str) -> Path:
+        return self._storage_root(runtime) / "sources" / source_id
+
+    def _clear_source_dir(self, runtime: ProductRuntime, source_id: str) -> None:
+        source_dir = self._source_dir(runtime, source_id)
+        if source_dir.exists():
+            shutil.rmtree(source_dir)
+
+    def _remove_source_artifacts(self, runtime: ProductRuntime, source_id: str) -> None:
+        pages_dir = runtime.pages_dir / source_id
+        if pages_dir.exists():
+            shutil.rmtree(pages_dir)
+
+    def _upsert_source_document(
+        self,
+        runtime: ProductRuntime,
+        *,
+        source_id: str,
+        filename: str,
+        content: bytes,
+        source_type: str,
+        replace_only: bool,
+    ) -> ProductRuntime:
+        manifest = self._load_manifest(runtime.manifest_path)
+        sources = manifest.setdefault("sources", [])
+        existing_index = next(
+            (index for index, source in enumerate(sources) if _derive_source_id(source, index) == source_id),
+            None,
+        )
+        if existing_index is None and replace_only:
+            raise KeyError(f"Unknown source: {source_id}")
+        if existing_index is None and len(sources) >= settings.max_documents_per_product:
+            raise ValueError(
+                f"Maximum of {settings.max_documents_per_product} documents allowed per product."
+            )
+
+        target_dir = self._source_dir(runtime, source_id)
+        self._clear_source_dir(runtime, source_id)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / Path(filename).name
+        target_path.write_bytes(content)
+        relative_path = str(target_path.relative_to(runtime.root_dir)).replace("\\", "/")
+
+        payload = {
+            "id": source_id,
+            "path": relative_path,
+            "type": source_type,
+            "label": Path(filename).name,
+        }
+        if existing_index is None:
+            sources.append(payload)
+        else:
+            sources[existing_index].update(payload)
+
+        if not manifest.get("primary_source_id"):
+            manifest["primary_source_id"] = source_id
+        manifest["status"] = "processing"
+        self._remove_source_artifacts(runtime, source_id)
+        self._write_manifest(runtime, manifest)
+        return self.require_product(runtime.id)
+
     def add_source_document(
         self,
         product_id: str,
@@ -164,40 +238,58 @@ class ProductRegistry:
     ) -> ProductRuntime:
         runtime = self.require_product(product_id)
         source_id = _slugify(Path(filename).stem)
-        target_dir = runtime.root_dir / "sources" / source_id
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / Path(filename).name
-        target_path.write_bytes(content)
-
-        manifest = self._load_manifest(runtime.manifest_path)
-        sources = manifest.setdefault("sources", [])
-        existing = next((s for s in sources if _derive_source_id(s, 0) == source_id), None)
-        relative_path = str(target_path.relative_to(runtime.root_dir)).replace("\\", "/")
-        if existing is None:
-            sources.append({
-                "id": source_id,
-                "path": relative_path,
-                "type": source_type,
-                "label": Path(filename).name,
-            })
-        else:
-            existing.update({"path": relative_path, "type": source_type, "label": Path(filename).name})
-
-        if not manifest.get("primary_source_id"):
-            manifest["primary_source_id"] = source_id
-        if manifest.get("status") in {"draft", "idle"}:
-            manifest["status"] = "processing"
-
-        runtime.manifest_path.write_text(
-            yaml.safe_dump(manifest, sort_keys=False),
-            encoding="utf-8",
+        return self._upsert_source_document(
+            runtime,
+            source_id=source_id,
+            filename=filename,
+            content=content,
+            source_type=source_type,
+            replace_only=False,
         )
-        self._cache.pop(product_id, None)
+
+    def replace_source_document(
+        self,
+        product_id: str,
+        source_id: str,
+        filename: str,
+        content: bytes,
+        source_type: str = "manual",
+    ) -> ProductRuntime:
+        runtime = self.require_product(product_id)
+        return self._upsert_source_document(
+            runtime,
+            source_id=source_id,
+            filename=filename,
+            content=content,
+            source_type=source_type,
+            replace_only=True,
+        )
+
+    def remove_source_document(self, product_id: str, source_id: str) -> ProductRuntime:
+        runtime = self.require_product(product_id)
+        manifest = self._load_manifest(runtime.manifest_path)
+        sources = manifest.get("sources", [])
+        remaining = [
+            source
+            for index, source in enumerate(sources)
+            if _derive_source_id(source, index) != source_id
+        ]
+        if len(remaining) == len(sources):
+            raise KeyError(f"Unknown source: {source_id}")
+
+        manifest["sources"] = remaining
+        if manifest.get("primary_source_id") == source_id:
+            manifest["primary_source_id"] = remaining[0]["id"] if remaining else None
+        manifest["status"] = "processing" if remaining else "draft"
+
+        self._clear_source_dir(runtime, source_id)
+        self._remove_source_artifacts(runtime, source_id)
+        self._write_manifest(runtime, manifest)
         return self.require_product(product_id)
 
     def save_logo(self, product_id: str, filename: str, content: bytes) -> ProductRuntime:
         runtime = self.require_product(product_id)
-        assets_dir = runtime.root_dir / "assets"
+        assets_dir = self._storage_root(runtime) / "assets"
         assets_dir.mkdir(parents=True, exist_ok=True)
         extension = Path(filename).suffix.lower() or ".png"
         target_path = assets_dir / f"logo{extension}"
@@ -205,11 +297,7 @@ class ProductRegistry:
 
         manifest = self._load_manifest(runtime.manifest_path)
         manifest["logo_path"] = str(target_path.relative_to(runtime.root_dir)).replace("\\", "/")
-        runtime.manifest_path.write_text(
-            yaml.safe_dump(manifest, sort_keys=False),
-            encoding="utf-8",
-        )
-        self._cache.pop(product_id, None)
+        self._write_manifest(runtime, manifest)
         return self.require_product(product_id)
 
     def save_status(self, product_id: str, status: IngestionStatus) -> None:

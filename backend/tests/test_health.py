@@ -18,3 +18,15 @@ def test_config_returns_product_info() -> None:
     assert data["product"] == "Vulcan OmniPro 220"
     assert "mig" in data["processes"]
     assert "120v" in data["voltages"]
+
+
+def test_cors_allows_local_dev_ports() -> None:
+    response = client.options(
+        "/api/products",
+        headers={
+            "Origin": "http://127.0.0.1:3003",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:3003"
