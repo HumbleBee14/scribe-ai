@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { buildBackendUrl } from "@/lib/api";
 import { ArtifactRenderer } from "@/components/artifacts/artifact-renderer";
-import type { ChatMessage, SelectedSourcePage } from "@/types/events";
+import type { ChatMessage, ContentBlock, SelectedSourcePage } from "@/types/events";
 
 interface Props {
   message: ChatMessage;
@@ -127,67 +127,49 @@ export function MessageBubble({
         {/* Tool calls: show only during streaming; collapse when done */}
         <ToolCallsSection toolCalls={message.toolCalls} isStreaming={!!message.isStreaming} />
 
-        {/* Thinking indicator: show while tools run but no text yet */}
-        {message.isStreaming && !message.content && (message.toolCalls?.length ?? 0) > 0 && (
+        {/* Thinking indicator: show while any tool call is still pending */}
+        {message.isStreaming && message.toolCalls?.some((t) => t.ok === undefined) && (
           <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-neutral-500 py-1">
             <Loader2 className="h-4 w-4 animate-spin text-orange-400" />
             <span>Generating response...</span>
           </div>
         )}
 
-        {/* Main text */}
-        {message.content && (
-          <div
-            className={`rounded-2xl px-4 py-3 ${
-              isUser
-                ? "bg-orange-500 text-white"
-                : "bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 border border-gray-200 dark:border-neutral-700"
-            }`}
-          >
-            <div className={`chat-prose ${isUser ? "chat-prose-user" : ""}`}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
-            </div>
-          </div>
-        )}
-
-        {/* Page images */}
-        {message.pageImages?.map((img, i) => (
-          <div
-            key={i}
-            className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-2"
-          >
-            <div className="mb-1 flex items-center justify-between gap-2 text-xs text-gray-400 dark:text-neutral-400">
-              <span>Manual Page {img.page}</span>
-              <button
-                onClick={() =>
-                  onSelectSourcePage?.({
-                    page: img.page,
-                    title: `Manual Page ${img.page}`,
-                  })
-                }
-                className="inline-flex items-center gap-1 text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300"
-              >
-                Open in sidebar
-                <ExternalLink className="h-3 w-3" />
-              </button>
-            </div>
-            <img
-              src={buildBackendUrl(img.url)}
-              alt={`Manual page ${img.page}`}
-              className="max-h-80 rounded"
-              loading="lazy"
+        {/* Interleaved content blocks (text, artifacts, images in arrival order) */}
+        {message.blocks && message.blocks.length > 0 ? (
+          message.blocks.map((block, i) => (
+            <InlineBlock
+              key={i}
+              block={block}
+              isUser={isUser}
+              onSelectSourcePage={onSelectSourcePage}
+              onImageClick={setLightboxSrc}
             />
-          </div>
-        ))}
-
-        {/* Artifacts: rendered via type-specific viewers */}
-        {message.artifacts?.map((artifact, i) => (
-          <ArtifactRenderer
-            key={`${artifact.id}-${i}`}
-            artifact={artifact}
-            onSelectSourcePage={onSelectSourcePage}
-          />
-        ))}
+          ))
+        ) : (
+          /* Fallback for old messages without blocks */
+          <>
+            {message.content && (
+              <div
+                className={`rounded-2xl px-4 py-3 ${
+                  isUser
+                    ? "bg-orange-500 text-white"
+                    : "bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 border border-gray-200 dark:border-neutral-700"
+                }`}
+              >
+                <div className={`chat-prose ${isUser ? "chat-prose-user" : ""}`}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                </div>
+              </div>
+            )}
+            {message.pageImages?.map((img, idx) => (
+              <PageImageBlock key={idx} img={img} onSelectSourcePage={onSelectSourcePage} onImageClick={setLightboxSrc} />
+            ))}
+            {message.artifacts?.map((artifact, idx) => (
+              <ArtifactRenderer key={`${artifact.id}-${idx}`} artifact={artifact} onSelectSourcePage={onSelectSourcePage} />
+            ))}
+          </>
+        )}
 
         {/* Clarification card */}
         {message.clarification && (
@@ -235,6 +217,93 @@ export function MessageBubble({
             </div>
           )}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// InlineBlock: renders a single content block (text, artifact, or image)
+// ---------------------------------------------------------------------------
+
+function InlineBlock({
+  block,
+  isUser,
+  onSelectSourcePage,
+  onImageClick,
+}: {
+  block: ContentBlock;
+  isUser: boolean;
+  onSelectSourcePage?: (source: SelectedSourcePage) => void;
+  onImageClick?: (src: string) => void;
+}) {
+  if (block.type === "text" && block.text.trim()) {
+    return (
+      <div
+        className={`rounded-2xl px-4 py-3 ${
+          isUser
+            ? "bg-orange-500 text-white"
+            : "bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 border border-gray-200 dark:border-neutral-700"
+        }`}
+      >
+        <div className={`chat-prose ${isUser ? "chat-prose-user" : ""}`}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
+        </div>
+      </div>
+    );
+  }
+  if (block.type === "artifact") {
+    return (
+      <ArtifactRenderer artifact={block.data} onSelectSourcePage={onSelectSourcePage} />
+    );
+  }
+  if (block.type === "image") {
+    return (
+      <PageImageBlock
+        img={block.data}
+        onSelectSourcePage={onSelectSourcePage}
+        onImageClick={onImageClick}
+      />
+    );
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// PageImageBlock: renders a manual page image with source link
+// ---------------------------------------------------------------------------
+
+function PageImageBlock({
+  img,
+  onSelectSourcePage,
+  onImageClick,
+}: {
+  img: { page: number; url: string };
+  onSelectSourcePage?: (source: SelectedSourcePage) => void;
+  onImageClick?: (src: string) => void;
+}) {
+  const url = buildBackendUrl(img.url);
+  return (
+    <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-2">
+      <div className="mb-1 flex items-center justify-between gap-2 text-xs text-gray-400 dark:text-neutral-400">
+        <span>Manual Page {img.page}</span>
+        <button
+          onClick={() =>
+            onSelectSourcePage?.({ page: img.page, title: `Manual Page ${img.page}` })
+          }
+          className="inline-flex items-center gap-1 text-orange-500 hover:text-orange-600"
+        >
+          Open in sidebar
+          <ExternalLink className="h-3 w-3" />
+        </button>
+      </div>
+      <button type="button" onClick={() => onImageClick?.(url)} className="block">
+        <img
+          src={url}
+          alt={`Manual page ${img.page}`}
+          className="max-h-80 rounded hover:opacity-90 transition-opacity"
+          loading="lazy"
+        />
+      </button>
     </div>
   );
 }

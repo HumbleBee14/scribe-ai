@@ -88,6 +88,12 @@ export type SSEEvent =
   | DoneEvent
   | ErrorEvent;
 
+/** An ordered content block in an assistant message. */
+export type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "artifact"; data: ArtifactEvent["data"] }
+  | { type: "image"; data: ImageEvent["data"] };
+
 /** Chat message stored in frontend state. */
 export interface ChatMessage {
   id: string;
@@ -100,6 +106,8 @@ export interface ChatMessage {
   safetyWarnings?: Array<SafetyWarningEvent["data"]>;
   clarification?: ClarificationEvent["data"];
   isStreaming?: boolean;
+  /** Ordered content blocks for interleaved rendering. */
+  blocks?: ContentBlock[];
 }
 
 export interface SessionState {

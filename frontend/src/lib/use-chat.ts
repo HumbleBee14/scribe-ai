@@ -191,9 +191,20 @@ export function useChat(conversationId: string) {
               const msg: ChatMessage = { ...message };
 
               switch (event) {
-                case "text_delta":
-                  msg.content += (data as { content: string }).content;
+                case "text_delta": {
+                  const chunk = (data as { content: string }).content;
+                  msg.content += chunk;
+                  // Append to last text block, or create one
+                  const blocks = [...(msg.blocks ?? [])];
+                  const lastBlock = blocks[blocks.length - 1];
+                  if (lastBlock && lastBlock.type === "text") {
+                    blocks[blocks.length - 1] = { type: "text", text: lastBlock.text + chunk };
+                  } else {
+                    blocks.push({ type: "text", text: chunk });
+                  }
+                  msg.blocks = blocks;
                   break;
+                }
 
                 case "tool_start":
                   msg.toolCalls = [
@@ -215,19 +226,20 @@ export function useChat(conversationId: string) {
                   break;
                 }
 
-                case "artifact":
-                  msg.artifacts = [
-                    ...(msg.artifacts ?? []),
-                    data as ArtifactEvent["data"],
-                  ];
+                case "artifact": {
+                  const artData = data as ArtifactEvent["data"];
+                  msg.artifacts = [...(msg.artifacts ?? []), artData];
+                  // Insert artifact block inline; next text_delta starts a new text block
+                  msg.blocks = [...(msg.blocks ?? []), { type: "artifact", data: artData }];
                   break;
+                }
 
-                case "image":
-                  msg.pageImages = [
-                    ...(msg.pageImages ?? []),
-                    data as ImageEvent["data"],
-                  ];
+                case "image": {
+                  const imgData = data as ImageEvent["data"];
+                  msg.pageImages = [...(msg.pageImages ?? []), imgData];
+                  msg.blocks = [...(msg.blocks ?? []), { type: "image", data: imgData }];
                   break;
+                }
 
                 case "safety_warning":
                   msg.safetyWarnings = [
