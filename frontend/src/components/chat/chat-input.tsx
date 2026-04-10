@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { ImagePlus, Send, Square } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ImagePlus, Send, Square, X } from "lucide-react";
 
 interface Props {
   onSend: (
@@ -18,7 +18,18 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
   const [pendingImages, setPendingImages] = useState<
     Array<{ mediaType: string; data: string; preview: string }>
   >([]);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Close lightbox on Escape
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxSrc(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [lightboxSrc]);
 
   const addImageFromFile = useCallback((file: File) => {
     if (!file.type.startsWith("image/")) return;
@@ -79,24 +90,59 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
     <div className="border-t border-gray-200 bg-white p-4">
       {/* Pending image previews */}
       {pendingImages.length > 0 && (
-        <div className="mb-3 flex gap-2 overflow-x-auto">
+        <div className="mb-3 flex gap-3 overflow-x-auto pb-1 pt-2 px-1">
           {pendingImages.map((img, i) => (
-            <div key={i} className="relative">
-              <img
-                src={img.preview}
-                alt="Upload preview"
-                className="h-16 w-16 rounded-lg object-cover border border-gray-200"
-              />
+            <div key={i} className="relative shrink-0">
+              {/* Thumbnail — click to preview */}
+              <button
+                type="button"
+                onClick={() => setLightboxSrc(img.preview)}
+                className="block"
+              >
+                <img
+                  src={img.preview}
+                  alt="Upload preview"
+                  className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-neutral-700 hover:opacity-90 transition-opacity"
+                />
+              </button>
+              {/* Remove button — fully visible, sits outside the image */}
               <button
                 onClick={() =>
                   setPendingImages((prev) => prev.filter((_, j) => j !== i))
                 }
-                className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white"
+                className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white shadow-md hover:bg-red-600 transition-colors"
+                title="Remove image"
               >
-                x
+                <X className="h-3 w-3" />
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Lightbox modal */}
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <div
+            className="relative max-h-[90vh] max-w-[90vw]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={lightboxSrc}
+              alt="Preview"
+              className="max-h-[85vh] max-w-[85vw] rounded-xl shadow-2xl object-contain"
+            />
+            <button
+              onClick={() => setLightboxSrc(null)}
+              className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 shadow-lg hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"
+              title="Close (Esc)"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
 
