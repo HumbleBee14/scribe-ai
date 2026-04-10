@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   AlertTriangle,
@@ -10,6 +11,7 @@ import {
   Search,
   ShieldAlert,
   User,
+  X,
 } from "lucide-react";
 import { buildBackendUrl } from "@/lib/api";
 import { ArtifactRenderer } from "@/components/artifacts/artifact-renderer";
@@ -27,6 +29,16 @@ export function MessageBubble({
   onSelectSourcePage,
 }: Props) {
   const isUser = message.role === "user";
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxSrc(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [lightboxSrc]);
 
   return (
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
@@ -45,16 +57,55 @@ export function MessageBubble({
 
       {/* Content */}
       <div className={`flex max-w-[80%] flex-col gap-2 ${isUser ? "items-end" : ""}`}>
-        {/* Uploaded user images */}
-        {message.images?.map((img, i) => (
-          <img
-            key={`${message.id}-upload-${i}`}
-            src={`data:${img.mediaType};base64,${img.data}`}
-            alt={`Uploaded reference ${i + 1}`}
-            className="max-h-48 rounded-xl border border-gray-200 dark:border-neutral-700 object-cover"
-            loading="lazy"
-          />
-        ))}
+        {/* Uploaded user images: compact inline row, click to expand */}
+        {message.images && message.images.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {message.images.map((img, i) => {
+              const src = `data:${img.mediaType};base64,${img.data}`;
+              return (
+                <button
+                  key={`${message.id}-upload-${i}`}
+                  type="button"
+                  onClick={() => setLightboxSrc(src)}
+                  className="block shrink-0"
+                  title="Click to expand"
+                >
+                  <img
+                    src={src}
+                    alt={`Uploaded reference ${i + 1}`}
+                    className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-neutral-700 hover:opacity-90 transition-opacity"
+                    loading="lazy"
+                  />
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Lightbox */}
+        {lightboxSrc && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setLightboxSrc(null)}
+          >
+            <div
+              className="relative max-h-[90vh] max-w-[90vw]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={lightboxSrc}
+                alt="Preview"
+                className="max-h-[85vh] max-w-[85vw] rounded-xl shadow-2xl object-contain"
+              />
+              <button
+                onClick={() => setLightboxSrc(null)}
+                className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 shadow-lg hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Safety warnings */}
         {message.safetyWarnings?.map((warning, i) => (
