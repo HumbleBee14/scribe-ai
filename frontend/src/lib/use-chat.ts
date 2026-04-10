@@ -31,17 +31,44 @@ function loadMessages(conversationId: string): ChatMessage[] {
   }
 }
 
+const MAX_STORED_BYTES = 512 * 1024; // 512KB per conversation
+
 function persistMessages(conversationId: string, messages: ChatMessage[]): void {
+  // Strip only uploaded image base64 (user-uploaded photos, too large)
+  // Everything else — artifacts, pageImages (URLs not base64), safetyWarnings — is kept
+  const cleaned = messages.map((m) => ({
+    ...m,
+    images: m.images?.map((img) => ({ ...img, data: "" })), // strip upload base64 only
+    isStreaming: false,
+  }));
+
+  const json = JSON.stringify(cleaned);
+
+  // If over size limit, keep only the last 20 messages to stay under quota
+  if (json.length > MAX_STORED_BYTES) {
+    const trimmed = cleaned.slice(-20);
+    const trimmedJson = JSON.stringify(trimmed);
+    try {
+      localStorage.setItem(MESSAGES_STORAGE_PREFIX + conversationId, trimmedJson);
+    } catch (e) {
+      console.warn("[useChat] Could not persist messages:", e);
+    }
+    return;
+  }
+
   try {
-    // Strip base64 image data from user messages before persisting (too large)
-    const stripped = messages.map((m) => ({
-      ...m,
-      images: m.images?.map((img) => ({ ...img, data: "" })), // strip base64
-      isStreaming: false, // never persist as streaming
-    }));
-    localStorage.setItem(MESSAGES_STORAGE_PREFIX + conversationId, JSON.stringify(stripped));
-  } catch {
-    // localStorage quota — skip silently
+    localStorage.setItem(MESSAGES_STORAGE_PREFIX + conversationId, json);
+  } catch (e) {
+    console.warn("[useChat] Could not persist messages (storage full?):", e);
+    // Try trimming to last 10 messages as fallback
+    try {
+      localStorage.setItem(
+        MESSAGES_STORAGE_PREFIX + conversationId,
+        JSON.stringify(cleaned.slice(-10))
+      );
+    } catch {
+      // Give up
+    }
   }
 }
 
