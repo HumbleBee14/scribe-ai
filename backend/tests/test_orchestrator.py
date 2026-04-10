@@ -1,4 +1,4 @@
-"""Tests for the orchestrator (fallback, event mapping, tool resolution, session)."""
+"""Tests for the SDK-only orchestrator event mapping and runtime behavior."""
 import pytest
 
 from app.agent.orchestrator import (
@@ -157,23 +157,57 @@ def test_render_artifact_removed_from_tools() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_falls_back_to_anthropic_when_sdk_startup_fails(
+async def test_run_delegates_to_sdk_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     orch = AgentOrchestrator()
     session = Session(id="test")
 
     async def fake_sdk(user_message: str, session: Session, images=None):
-        raise RuntimeError("sdk unavailable")
-        yield  # pragma: no cover
-
-    async def fake_anthropic(user_message: str, session: Session, images=None):
+        assert user_message == "hello"
+        assert images is None
         yield {"event": "done", "data": {"status": "completed", "turns": 1}}
 
-    monkeypatch.setattr(orch, "_should_use_agent_sdk", lambda: True)
     monkeypatch.setattr(orch, "_run_with_agent_sdk", fake_sdk)
-    monkeypatch.setattr(orch, "_run_with_anthropic_loop", fake_anthropic)
 
     events = [event async for event in orch.run("hello", session)]
 
     assert events == [{"event": "done", "data": {"status": "completed", "turns": 1}}]
+
+
+@pytest.mark.asyncio
+async def test_run_surfaces_sdk_error_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orch = AgentOrchestrator()
+    session = Session(id="test")
+
+    async def fake_sdk(user_message: str, session: Session, images=None):
+        yield {"event": "error", "data": {"message": "Agent runtime error. Please try again."}}
+
+    monkeypatch.setattr(orch, "_run_with_agent_sdk", fake_sdk)
+
+    events = [event async for event in orch.run("hello", session)]
+
+    assert events == [
+        {"event": "error", "data": {"message": "Agent runtime error. Please try again."}}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_build_multimodal_prompt_includes_base64_images() -> None:
+    orch = AgentOrchestrator()
+
+    prompt = orch._build_multimodal_prompt(
+        "diagnose this weld",
+        [{"media_type": "image/png", "data": "abc123"}],
+    )
+
+    chunks = [chunk async for chunk in prompt]
+    assert len(chunks) == 1
+    message = chunks[0]["message"]
+    assert message["role"] == "user"
+    assert message["content"][0]["type"] == "image"
+    assert message["content"][0]["source"]["media_type"] == "image/png"
+    assert message["content"][0]["source"]["data"] == "abc123"
+    assert message["content"][1] == {"type": "text", "text": "diagnose this weld"}
