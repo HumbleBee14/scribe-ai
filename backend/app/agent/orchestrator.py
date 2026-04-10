@@ -59,6 +59,22 @@ def _get_tool_label(tool_name: str) -> str:
     return _TOOL_LABELS.get(clean, clean)
 
 
+def _coerce_page_number(value: Any) -> int | None:
+    """Normalize page values coming from tool inputs."""
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            page = int(stripped)
+        except ValueError:
+            return None
+        return page if page > 0 else None
+    return None
+
+
 class AgentOrchestrator:
     """Runs the Claude Agent SDK and maps events to our SSE contract.
 
@@ -626,7 +642,7 @@ class AgentOrchestrator:
             })
 
         elif tool_name == "get_page_image":
-            page = tool_input.get("page")
+            page = _coerce_page_number(tool_input.get("page"))
             if page:
                 results.append({
                     "event": "image",

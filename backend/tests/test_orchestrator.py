@@ -3,6 +3,7 @@ import pytest
 
 from app.agent.orchestrator import (
     AgentOrchestrator,
+    _coerce_page_number,
     _get_tool_label,
     _strip_mcp_prefix,
 )
@@ -40,6 +41,19 @@ def test_get_tool_label_with_mcp_prefix() -> None:
 
 def test_get_tool_label_unknown_tool() -> None:
     assert _get_tool_label("unknown_tool") == "unknown_tool"
+
+
+def test_coerce_page_number_accepts_ints_and_numeric_strings() -> None:
+    assert _coerce_page_number(13) == 13
+    assert _coerce_page_number("13") == 13
+    assert _coerce_page_number(" 07 ") == 7
+
+
+def test_coerce_page_number_rejects_invalid_values() -> None:
+    assert _coerce_page_number(None) is None
+    assert _coerce_page_number("") is None
+    assert _coerce_page_number("page 7") is None
+    assert _coerce_page_number(0) is None
 
 
 def test_orchestrator_class_exists() -> None:
@@ -103,6 +117,35 @@ def test_emit_tool_specific_events_page_image() -> None:
     assert len(image_events) == 1
     assert image_events[0]["data"]["page"] == 13
     assert "page_13" in image_events[0]["data"]["url"]
+
+
+def test_emit_tool_specific_events_page_image_accepts_string_page() -> None:
+    orch = AgentOrchestrator()
+    session = Session(id="test")
+
+    events = orch._emit_tool_specific_events(
+        "get_page_image",
+        {"page": "14"},
+        session,
+    )
+
+    image_events = [e for e in events if e["event"] == "image"]
+    assert len(image_events) == 1
+    assert image_events[0]["data"]["page"] == 14
+    assert image_events[0]["data"]["url"].endswith("page_14.png")
+
+
+def test_emit_tool_specific_events_page_image_ignores_invalid_page() -> None:
+    orch = AgentOrchestrator()
+    session = Session(id="test")
+
+    events = orch._emit_tool_specific_events(
+        "get_page_image",
+        {"page": "page fourteen"},
+        session,
+    )
+
+    assert [e["event"] for e in events] == ["tool_end"]
 
 
 def test_render_artifact_removed_from_tools() -> None:
