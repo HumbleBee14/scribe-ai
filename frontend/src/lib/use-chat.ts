@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { streamChat } from "./api";
+import { saveConversation } from "./history";
 import type {
   ArtifactEvent,
   ChatMessage,
@@ -18,14 +19,81 @@ function nextId(): string {
   return `msg-${++messageCounter}-${Date.now()}`;
 }
 
-const REQUEST_TIMEOUT_MS = 60_000; // 60 seconds
+const REQUEST_TIMEOUT_MS = 90_000; // 90 seconds
+const MESSAGES_STORAGE_PREFIX = "prox_msgs_";
 
-export function useChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+function loadMessages(conversationId: string): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(MESSAGES_STORAGE_PREFIX + conversationId);
+    return raw ? (JSON.parse(raw) as ChatMessage[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistMessages(conversationId: string, messages: ChatMessage[]): void {
+  try {
+    // Strip base64 image data from user messages before persisting (too large)
+    const stripped = messages.map((m) => ({
+      ...m,
+      images: m.images?.map((img) => ({ ...img, data: "" })), // strip base64
+      isStreaming: false, // never persist as streaming
+    }));
+    localStorage.setItem(MESSAGES_STORAGE_PREFIX + conversationId, JSON.stringify(stripped));
+  } catch {
+    // localStorage quota — skip silently
+  }
+}
+
+/** Mark all pending tool calls (ok === undefined) as completed. */
+function resolvePendingToolCalls(msg: ChatMessage): ChatMessage {
+  if (!msg.toolCalls?.some((t) => t.ok === undefined)) return msg;
+  return {
+    ...msg,
+    toolCalls: msg.toolCalls.map((t) =>
+      t.ok === undefined ? { ...t, ok: true } : t
+    ),
+  };
+}
+
+export function useChat(conversationId: string) {
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    loadMessages(conversationId)
+  );
   const [isStreaming, setIsStreaming] = useState(false);
   const [session, setSession] = useState<SessionState | null>(null);
-  const sessionIdRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string>(conversationId);
   const abortRef = useRef<AbortController | null>(null);
+
+  // When conversationId changes (history navigation), reload messages
+  useEffect(() => {
+    setMessages(loadMessages(conversationId));
+    sessionIdRef.current = conversationId;
+    setSession(null);
+  }, [conversationId]);
+
+  // Persist messages to localStorage on every change (debounced)
+  const persistRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (persistRef.current) clearTimeout(persistRef.current);
+    persistRef.current = setTimeout(() => {
+      persistMessages(conversationId, messages);
+      // Update conversation summary
+      const firstUser = messages.find((m) => m.role === "user");
+      if (firstUser) {
+        saveConversation({
+          id: conversationId,
+          title: firstUser.content.slice(0, 60) || "Image conversation",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          messageCount: messages.length,
+        });
+      }
+    }, 500);
+    return () => {
+      if (persistRef.current) clearTimeout(persistRef.current);
+    };
+  }, [messages, conversationId]);
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
@@ -38,12 +106,6 @@ export function useChat() {
     ) => {
       if (!text.trim() && !images?.length) return;
 
-      // Initialize session ID on first message
-      if (!sessionIdRef.current) {
-        sessionIdRef.current = crypto.randomUUID();
-      }
-
-      // Add user message
       const userMsg: ChatMessage = {
         id: nextId(),
         role: "user",
@@ -51,7 +113,6 @@ export function useChat() {
         images,
       };
 
-      // Prepare assistant message placeholder
       const assistantId = nextId();
       const assistantMsg: ChatMessage = {
         id: assistantId,
@@ -67,7 +128,6 @@ export function useChat() {
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
 
-      // Create abort controller for stop button + timeout
       const controller = new AbortController();
       abortRef.current = controller;
       const timeout = setTimeout(() => controller.abort("timeout"), REQUEST_TIMEOUT_MS);
@@ -101,112 +161,105 @@ export function useChat() {
           setMessages((prev) =>
             prev.map((message) => {
               if (message.id !== assistantId) return message;
-
-              const nextMessage: ChatMessage = { ...message };
+              const msg: ChatMessage = { ...message };
 
               switch (event) {
                 case "text_delta":
-                  nextMessage.content += (data as { content: string }).content;
+                  msg.content += (data as { content: string }).content;
                   break;
 
                 case "tool_start":
-                  nextMessage.toolCalls = [
-                    ...(nextMessage.toolCalls ?? []),
-                    {
-                      tool: data.tool as string,
-                      label: data.label as string,
-                    },
+                  msg.toolCalls = [
+                    ...(msg.toolCalls ?? []),
+                    { tool: data.tool as string, label: data.label as string },
                   ];
                   break;
 
                 case "tool_end": {
-                  const toolCalls = nextMessage.toolCalls ?? [];
-                  const idx = toolCalls.findIndex(
+                  const calls = msg.toolCalls ?? [];
+                  const idx = calls.findIndex(
                     (t) => t.tool === (data.tool as string) && t.ok === undefined
                   );
                   if (idx >= 0) {
-                    const copy = [...toolCalls];
+                    const copy = [...calls];
                     copy[idx] = { ...copy[idx], ok: data.ok as boolean };
-                    nextMessage.toolCalls = copy;
+                    msg.toolCalls = copy;
                   }
                   break;
                 }
 
                 case "artifact":
-                  nextMessage.artifacts = [
-                    ...(nextMessage.artifacts ?? []),
+                  msg.artifacts = [
+                    ...(msg.artifacts ?? []),
                     data as ArtifactEvent["data"],
                   ];
                   break;
 
                 case "image":
-                  nextMessage.pageImages = [
-                    ...(nextMessage.pageImages ?? []),
+                  msg.pageImages = [
+                    ...(msg.pageImages ?? []),
                     data as ImageEvent["data"],
                   ];
                   break;
 
                 case "safety_warning":
-                  nextMessage.safetyWarnings = [
-                    ...(nextMessage.safetyWarnings ?? []),
+                  msg.safetyWarnings = [
+                    ...(msg.safetyWarnings ?? []),
                     data as SafetyWarningEvent["data"],
                   ];
                   break;
 
                 case "clarification":
-                  nextMessage.clarification = data as {
-                    question: string;
-                    options?: string[];
-                  };
+                  msg.clarification = data as { question: string; options?: string[] };
                   break;
 
                 case "done":
-                  nextMessage.isStreaming = false;
+                  // Resolve any tool calls still spinning (tool_end may not have arrived)
+                  msg.isStreaming = false;
+                  msg.toolCalls = (msg.toolCalls ?? []).map((t) =>
+                    t.ok === undefined ? { ...t, ok: true } : t
+                  );
                   break;
 
                 case "error":
-                  nextMessage.content += `\n\n**Error:** ${(data as ErrorEvent["data"]).message}`;
-                  nextMessage.isStreaming = false;
+                  msg.content += `\n\n**Error:** ${(data as ErrorEvent["data"]).message}`;
+                  msg.isStreaming = false;
+                  msg.toolCalls = (msg.toolCalls ?? []).map((t) =>
+                    t.ok === undefined ? { ...t, ok: false } : t
+                  );
                   break;
               }
 
-              return nextMessage;
+              return msg;
             })
           );
-
-          if (event === "done") {
-            const doneData = data as DoneEvent["data"];
-            if (doneData.status === "clarification_required") {
-              setIsStreaming(false);
-            }
-          }
         }
 
+        // Ensure streaming is cleared after the stream ends
         setMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantId ? { ...message, isStreaming: false } : message
+          prev.map((m) =>
+            m.id === assistantId ? resolvePendingToolCalls({ ...m, isStreaming: false }) : m
           )
         );
       } catch (err) {
-        // Ignore aborts triggered by the stop button or timeout
         const isAbort = err instanceof DOMException && err.name === "AbortError";
         const msg = isAbort
           ? controller.signal.reason === "timeout"
-            ? "Request timed out after 60 seconds."
+            ? "Request timed out after 90 seconds."
             : "Stopped."
           : `Connection error: ${err instanceof Error ? err.message : "Unknown error"}`;
 
         setMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantId
-              ? {
-                  ...message,
-                  content: message.content
-                    ? message.content + (isAbort ? "" : `\n\n**${msg}**`)
+          prev.map((m) =>
+            m.id === assistantId
+              ? resolvePendingToolCalls({
+                  ...m,
+                  content: m.content
+                    ? m.content + (isAbort && msg === "Stopped." ? "" : `\n\n*${msg}*`)
                     : `*${msg}*`,
                   isStreaming: false,
-                }
-              : message
+                })
+              : m
           )
         );
       } finally {
@@ -215,12 +268,11 @@ export function useChat() {
         setIsStreaming(false);
       }
     },
-    []
+    [conversationId]
   );
 
   const clearMessages = useCallback(() => {
     setMessages([]);
-    sessionIdRef.current = null;
     setSession(null);
   }, []);
 

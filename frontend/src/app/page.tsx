@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useChat } from "@/lib/use-chat";
-import { saveConversation } from "@/lib/history";
 import { ChatInput } from "@/components/chat/chat-input";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { WelcomeScreen } from "@/components/chat/welcome-screen";
@@ -13,37 +12,18 @@ import { ThemeToggle } from "@/components/layout/theme-toggle";
 import type { SelectedSourcePage } from "@/types/events";
 
 export default function Home() {
-  const { messages, isStreaming, session, sendMessage, stopStreaming, clearMessages } =
-    useChat();
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [selectedSource, setSelectedSource] = useState<SelectedSourcePage | null>(null);
   const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
-  const [historyTick, setHistoryTick] = useState(0); // trigger history sidebar refresh
+  const [selectedSource, setSelectedSource] = useState<SelectedSourcePage | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // Persist conversation summary whenever messages change
-  useEffect(() => {
-    if (messages.length === 0) return;
-    const firstUserMsg = messages.find((m) => m.role === "user");
-    if (!firstUserMsg) return;
-    const title =
-      firstUserMsg.content.slice(0, 60) || "Image conversation";
-    saveConversation({
-      id: conversationId,
-      title,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      messageCount: messages.length,
-    });
-    setHistoryTick((t) => t + 1);
-  }, [messages, conversationId]);
+  // useChat now owns persistence and restoration keyed by conversationId
+  const { messages, isStreaming, session, sendMessage, stopStreaming, clearMessages } =
+    useChat(conversationId);
 
   const handleSend = (text: string, images?: Array<{ mediaType: string; data: string }>) => {
     sendMessage(text, images);
+    // Scroll after a short delay so the new message is rendered
+    setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   };
 
   const handleNew = useCallback(() => {
@@ -54,13 +34,11 @@ export default function Home() {
 
   const handleSelectHistory = useCallback(
     (id: string) => {
-      if (id !== conversationId) {
-        clearMessages();
-        setSelectedSource(null);
-        setConversationId(id);
-      }
+      if (id === conversationId) return;
+      setSelectedSource(null);
+      setConversationId(id); // useChat will reload messages for this id
     },
-    [conversationId, clearMessages]
+    [conversationId]
   );
 
   const artifacts = useMemo(
@@ -75,7 +53,6 @@ export default function Home() {
         activeId={conversationId}
         onSelect={handleSelectHistory}
         onNew={handleNew}
-        key={historyTick}
       />
 
       {/* Center: Chat */}
@@ -93,9 +70,7 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-          </div>
+          <ThemeToggle />
         </header>
 
         {/* Messages */}
@@ -118,7 +93,7 @@ export default function Home() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-gray-200 dark:border-neutral-800">
+        <div className="border-t border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
           <div className="max-w-3xl mx-auto">
             <ChatInput
               onSend={handleSend}

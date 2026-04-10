@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MessageSquare, Plus, Trash2 } from "lucide-react";
 import {
   ConversationSummary,
@@ -17,9 +17,24 @@ interface Props {
 export function HistorySidebar({ activeId, onSelect, onNew }: Props) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     setConversations(listConversations());
-  }, [activeId]); // Reload when active conversation changes (new messages added)
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [activeId, reload]);
+
+  // Refresh when localStorage is updated (new messages saved)
+  useEffect(() => {
+    window.addEventListener("storage", reload);
+    // Also poll every 3s for same-tab updates (localStorage events don't fire in same tab)
+    const interval = setInterval(reload, 3000);
+    return () => {
+      window.removeEventListener("storage", reload);
+      clearInterval(interval);
+    };
+  }, [reload]);
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
