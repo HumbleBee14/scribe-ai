@@ -136,7 +136,7 @@ export function MessageBubble({
                 : "bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 border border-gray-200 dark:border-neutral-700"
             }`}
           >
-            <div className={`prose prose-sm max-w-none ${isUser ? "prose-invert" : "dark:prose-invert"}`}>
+            <div className={`chat-prose ${isUser ? "chat-prose-user" : ""}`}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
             </div>
           </div>
