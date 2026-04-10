@@ -41,7 +41,6 @@ _TOOL_LABELS: dict[str, str] = {
     "clarify_question": "Preparing clarification",
     "get_page_image": "Loading manual page",
     "diagnose_weld": "Reviewing weld symptoms",
-    "render_artifact": "Generating visual aid",
     "search_manual": "Searching manual",
     "Read": "Reading from manual",
 }
@@ -277,7 +276,7 @@ class AgentOrchestrator:
             try:
                 response = await self._client.messages.create(
                     model=self._model,
-                    max_tokens=8096,
+                    max_tokens=16384,
                     system=system_prompt,
                     tools=self._tools,
                     messages=self._build_messages_with_context(messages),
@@ -447,7 +446,7 @@ class AgentOrchestrator:
     def __init_stream_state(self) -> None:
         """Reset per-request streaming state for tool input accumulation."""
         # Track in-progress tool blocks by index
-        # {block_index: {"name": "render_artifact", "input_json": ""}}
+        # {block_index: {"name": "tool_name", "input_json": ""}}
         self._active_tool_blocks: dict[int, dict[str, str]] = {}
 
     def _map_stream_event(
@@ -629,30 +628,6 @@ class AgentOrchestrator:
                         "url": f"/assets/images/page_{page:02d}.png",
                     },
                 })
-
-        elif tool_name == "render_artifact":
-            renderer = tool_input.get("type", "")
-            code = tool_input.get("code", "")
-            title = tool_input.get("title", "")
-            print(
-                f"[ARTIFACT] type={renderer}, title={title}, "
-                f"code_length={len(code)}, code_preview={code[:150]}...",
-                flush=True,
-            )
-            if code:
-                results.append({
-                    "event": "artifact",
-                    "data": {
-                        "id": f"art_{hash(title) % 100000:05d}",
-                        "renderer": renderer,
-                        "type": renderer,
-                        "title": title,
-                        "code": code,
-                        "source_pages": tool_input.get("source_pages", []),
-                    },
-                })
-            else:
-                logger.warning("[artifact] EMPTY code for %s, skipping", title)
 
         # Emit tool_end for all recognized tools
         results.append({

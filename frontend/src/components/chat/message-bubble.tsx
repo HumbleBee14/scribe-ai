@@ -10,6 +10,7 @@ import {
   CheckCircle,
   ChevronDown,
   Copy,
+  Expand,
   ExternalLink,
   ImageIcon,
   Loader2,
@@ -19,6 +20,9 @@ import {
 } from "lucide-react";
 import { buildBackendUrl } from "@/lib/api";
 import { ArtifactRenderer } from "@/components/artifacts/artifact-renderer";
+import { MermaidViewer } from "@/components/artifacts/mermaid-viewer";
+import { SVGViewer } from "@/components/artifacts/svg-viewer";
+import { HTMLViewer } from "@/components/artifacts/html-viewer";
 import type { ChatMessage, ContentBlock, SelectedSourcePage } from "@/types/events";
 
 /**
@@ -303,6 +307,71 @@ export function MessageBubble({
 }
 
 // ---------------------------------------------------------------------------
+// Artifact tag parser: extract <artifact type="..." title="...">content</artifact>
+// ---------------------------------------------------------------------------
+
+interface ParsedArtifact {
+  type: string;
+  title: string;
+  content: string;
+}
+
+type TextSegment =
+  | { kind: "text"; text: string }
+  | { kind: "artifact"; artifact: ParsedArtifact }
+  | { kind: "artifact_loading"; type: string; title: string };
+
+const ARTIFACT_REGEX = /<artifact\s+type="([^"]*)"(?:\s+title="([^"]*)")?[^>]*>([\s\S]*?)<\/artifact>/g;
+const ARTIFACT_OPEN_REGEX = /<artifact\s+type="([^"]*)"(?:\s+title="([^"]*)")?[^>]*>/;
+
+function parseArtifactTags(text: string): TextSegment[] {
+  const segments: TextSegment[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const regex = new RegExp(ARTIFACT_REGEX.source, "g");
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      const before = text.slice(lastIndex, match.index).trim();
+      if (before) segments.push({ kind: "text", text: before });
+    }
+    segments.push({
+      kind: "artifact",
+      artifact: { type: match[1], title: match[2] || "", content: match[3].trim() },
+    });
+    lastIndex = regex.lastIndex;
+  }
+
+  // Text after last closed artifact
+  if (lastIndex < text.length) {
+    const remaining = text.slice(lastIndex).trim();
+    if (remaining) {
+      // Check if there's an unclosed <artifact ...> tag (still streaming)
+      const openMatch = remaining.match(ARTIFACT_OPEN_REGEX);
+      if (openMatch) {
+        // Text before the open tag
+        const beforeOpen = remaining.slice(0, openMatch.index).trim();
+        if (beforeOpen) segments.push({ kind: "text", text: beforeOpen });
+        // Show loading placeholder for the streaming artifact
+        segments.push({
+          kind: "artifact_loading",
+          type: openMatch[1] || "",
+          title: openMatch[2] || "",
+        });
+      } else {
+        segments.push({ kind: "text", text: remaining });
+      }
+    }
+  }
+
+  if (segments.length === 0 && text.trim()) {
+    segments.push({ kind: "text", text });
+  }
+
+  return segments;
+}
+
+// ---------------------------------------------------------------------------
 // InlineBlock: renders a single content block (text, artifact, or image)
 // ---------------------------------------------------------------------------
 
@@ -318,33 +387,50 @@ function InlineBlock({
   onImageClick?: (src: string) => void;
 }) {
   if (block.type === "text" && block.text.trim()) {
-    // Strip the ```followups``` code block from displayed text
     const displayText = stripFollowupsBlock(block.text);
     if (!displayText.trim()) return null;
+
+    // Parse <artifact> tags from the text
+    const segments = parseArtifactTags(displayText);
+    const hasSpecial = segments.some((s) => s.kind !== "text");
+
+    // If no artifacts or loading placeholders, render as plain text
+    if (!hasSpecial) {
+      return (
+        <TextBubble text={displayText} isUser={isUser} onSelectSourcePage={onSelectSourcePage} />
+      );
+    }
+
+    // Mixed content: render text and artifacts interleaved
     return (
-      <div
-        className={`rounded-2xl px-4 py-3 ${
-          isUser
-            ? "bg-orange-500 text-white"
-            : "bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 border border-gray-200 dark:border-neutral-700"
-        }`}
-      >
-        <div className={`chat-prose ${isUser ? "chat-prose-user" : ""}`}>
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              p: ({ children }) => <p>{linkifyPageRefs(children, onSelectSourcePage)}</p>,
-              li: ({ children }) => <li>{linkifyPageRefs(children, onSelectSourcePage)}</li>,
-              strong: ({ children }) => <strong>{linkifyPageRefs(children, onSelectSourcePage)}</strong>,
-              em: ({ children }) => <em>{linkifyPageRefs(children, onSelectSourcePage)}</em>,
-            }}
-          >
-            {displayText}
-          </ReactMarkdown>
-        </div>
-      </div>
+      <>
+        {segments.map((seg, i) => {
+          if (seg.kind === "text") {
+            return <TextBubble key={i} text={seg.text} isUser={isUser} onSelectSourcePage={onSelectSourcePage} />;
+          }
+          if (seg.kind === "artifact_loading") {
+            return (
+              <div key={i} className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 p-6 flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-orange-400" />
+                <div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+                    Generating {seg.title || seg.type || "artifact"}...
+                  </div>
+                  <div className="text-xs text-gray-400 dark:text-neutral-500 mt-0.5">
+                    {seg.type.toUpperCase()}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <InlineArtifact key={i} artifact={seg.artifact} onSelectSourcePage={onSelectSourcePage} />
+          );
+        })}
+      </>
     );
   }
+
   if (block.type === "artifact") {
     return (
       <ArtifactRenderer artifact={block.data} onSelectSourcePage={onSelectSourcePage} />
@@ -360,6 +446,125 @@ function InlineBlock({
     );
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// TextBubble: renders a text-only chat bubble with markdown
+// ---------------------------------------------------------------------------
+
+function TextBubble({
+  text,
+  isUser,
+  onSelectSourcePage,
+}: {
+  text: string;
+  isUser: boolean;
+  onSelectSourcePage?: (source: SelectedSourcePage) => void;
+}) {
+  // User messages: orange bubble. Assistant messages: no container, text flows naturally.
+  if (isUser) {
+    return (
+      <div className="rounded-2xl px-4 py-3 bg-orange-500 text-white">
+        <div className="chat-prose chat-prose-user">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="chat-prose text-gray-900 dark:text-neutral-100">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              p: ({ children }) => <p>{linkifyPageRefs(children, onSelectSourcePage)}</p>,
+              li: ({ children }) => <li>{linkifyPageRefs(children, onSelectSourcePage)}</li>,
+              strong: ({ children }) => <strong>{linkifyPageRefs(children, onSelectSourcePage)}</strong>,
+              em: ({ children }) => <em>{linkifyPageRefs(children, onSelectSourcePage)}</em>,
+            }}
+          >
+            {text}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+/** Renders an inline artifact (parsed from <artifact> tags in text). */
+function InlineArtifact({
+  artifact,
+  onSelectSourcePage,
+}: {
+  artifact: ParsedArtifact;
+  onSelectSourcePage?: (source: SelectedSourcePage) => void;
+}) {
+  const { type, title, content } = artifact;
+  const [zoomed, setZoomed] = useState(false);
+
+  useEffect(() => {
+    if (!zoomed) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setZoomed(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [zoomed]);
+
+  const renderContent = () => {
+    if (type === "mermaid") return <MermaidViewer code={content} title={title} />;
+    if (type === "svg") return <SVGViewer code={content} title={title} />;
+    if (type === "html" || type === "table") return <HTMLViewer code={content} title={title} />;
+    return (
+      <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3">
+        <div className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{title}</div>
+        <pre className="mt-2 overflow-x-auto rounded bg-gray-50 dark:bg-neutral-950 p-2 text-xs text-gray-700 dark:text-neutral-300">
+          <code>{content.slice(0, 500)}</code>
+        </pre>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      {/* Inline with expand button on hover */}
+      <div className="relative group/art my-2 -mx-2">
+        {renderContent()}
+        <button
+          onClick={() => setZoomed(true)}
+          className="absolute top-2 right-2 hidden group-hover/art:flex h-7 w-7 items-center justify-center rounded-lg bg-black/50 text-white hover:bg-black/70 transition-colors"
+          title="Expand"
+        >
+          <Expand className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Fullscreen modal */}
+      {zoomed && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setZoomed(false)}
+        >
+          <div
+            className="relative w-full max-w-6xl max-h-[94vh] flex flex-col rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl border border-gray-200 dark:border-neutral-700 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-700 px-6 py-3 shrink-0">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-neutral-100 truncate">{title}</h3>
+                <p className="text-xs text-gray-400 dark:text-neutral-500 uppercase">{type}</p>
+              </div>
+              <button
+                onClick={() => setZoomed(false)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto min-h-0 bg-gray-50 dark:bg-neutral-950 [&_iframe]:!min-h-[60vh]">
+              {renderContent()}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 // ---------------------------------------------------------------------------

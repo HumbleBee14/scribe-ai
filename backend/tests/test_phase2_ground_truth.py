@@ -66,6 +66,5 @@ def test_eval_tool_names_match_canonical_contract() -> None:
         "search_manual",
         "get_page_image",
         "clarify_question",
-        "render_artifact",
     }
     assert set(tool_names).issubset(allowed)

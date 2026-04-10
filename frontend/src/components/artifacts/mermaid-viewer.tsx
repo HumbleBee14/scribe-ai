@@ -28,6 +28,92 @@ const EMOJI_MAP: Record<string, string> = {
 };
 
 /**
+ * Fix multi-line node labels in Mermaid code.
+ * Mermaid does NOT support literal newlines inside node brackets.
+ * Claude frequently generates multi-line node text which crashes the parser.
+ *
+ * Simple approach: join all lines between unmatched open/close brackets.
+ * Replace the newlines with <br/> for [] nodes, spaces for {} and () nodes.
+ */
+function fixMultilineNodes(code: string): string {
+  // Join lines that are continuations of unclosed brackets.
+  // Track what TYPE of bracket we're inside so we can quote correctly.
+  const lines = code.split("\n");
+  const output: string[] = [];
+  let buffer = "";
+  let depth = 0;
+  let firstBracket = ""; // the outermost bracket char when multi-line started
+
+  for (const line of lines) {
+    if (depth > 0) {
+      buffer += "<br/>" + line.trim();
+    } else {
+      if (buffer) {
+        // This buffer was a multi-line node. Quote if the outermost bracket is [
+        if (firstBracket === "[" && buffer.includes("<br/>")) {
+          // Find the [ that started it and add quotes around content
+          buffer = quoteRectangleContent(buffer);
+        }
+        output.push(buffer);
+      }
+      buffer = line;
+      firstBracket = "";
+    }
+
+    for (const ch of line) {
+      if (ch === "[" || ch === "{" || ch === "(") {
+        if (depth === 0) firstBracket = ch;
+        depth++;
+      }
+      if (ch === "]" || ch === "}" || ch === ")") {
+        depth--;
+      }
+    }
+    if (depth < 0) depth = 0;
+  }
+
+  // Flush last buffer
+  if (buffer) {
+    if (firstBracket === "[" && buffer.includes("<br/>")) {
+      buffer = quoteRectangleContent(buffer);
+    }
+    output.push(buffer);
+  }
+
+  return output.join("\n");
+}
+
+/** Add quotes around the LAST [...] content that contains <br/> in a line. */
+function quoteRectangleContent(line: string): string {
+  // Find the last [ that opens a multi-line rectangle
+  // We need to be careful not to quote ([...]) stadium content
+  const lastOpenBracket = line.lastIndexOf("[");
+  if (lastOpenBracket < 0) return line;
+
+  // Skip if preceded by ( (stadium shape)
+  if (lastOpenBracket > 0 && line[lastOpenBracket - 1] === "(") return line;
+
+  const closeBracket = line.indexOf("]", lastOpenBracket);
+  if (closeBracket < 0) return line;
+
+  const before = line.slice(0, lastOpenBracket + 1);
+  const content = line.slice(lastOpenBracket + 1, closeBracket);
+  const after = line.slice(closeBracket);
+
+  if (!content.includes("<br/>")) return line;
+
+  const cleaned = content.replace(/^"|"$/g, "");
+  return before + '"' + cleaned + '"' + after;
+}
+
+/** Detect if Mermaid code was truncated (incomplete AI output). */
+function detectTruncation(_code: string): boolean {
+  // Disabled: let Mermaid try to render and show its own error if invalid.
+  // The truncation heuristic had too many false positives.
+  return false;
+}
+
+/**
  * Sanitize Mermaid code so the parser doesn't choke on special characters.
  * - Replaces literal \n with real newlines
  * - Strips control characters
@@ -35,9 +121,25 @@ const EMOJI_MAP: Record<string, string> = {
  * - Wraps node labels containing special chars in quotes
  */
 function sanitizeMermaid(raw: string): string {
-  let code = raw
-    .replace(/\\n/g, "\n")
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+  // The code arrives from JSON with \n as literal two-char sequences.
+  // We need to convert structural \n (between statements) to real newlines,
+  // and \n inside node labels to <br/>.
+  //
+  // Strategy: first convert ALL \n to real newlines, then fix multi-line nodes.
+  let code = raw.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+
+  // If the code has no real newlines but has \n literals, it came as a single line
+  if (!code.includes("\n") && code.includes("\\n")) {
+    code = code.replace(/\\n/g, "\n");
+  } else if (code.includes("\\n")) {
+    // Mixed: has both real newlines and \n literals.
+    // \n inside quotes or brackets = label break, convert to <br/>
+    // \n outside = structural, convert to real newline
+    code = code.replace(/\\n/g, "\n");
+  }
+
+  // Now fix multi-line node labels (real newlines inside brackets become <br/>)
+  code = fixMultilineNodes(code);
 
   // Replace known emojis with ASCII equivalents
   for (const [emoji, replacement] of Object.entries(EMOJI_MAP)) {
@@ -51,12 +153,21 @@ function sanitizeMermaid(raw: string): string {
   );
 
   // Fix common Claude Mermaid syntax mistakes:
-  // 1. [[ inside node text (Mermaid interprets as subroutine shape)
+
+  // CRITICAL: Replace literal newlines inside node brackets with <br/>
+  // Mermaid does NOT support multi-line text in [] {} () nodes.
+  // Claude frequently generates:
+  //   PORO[POROSITY
+  //   Holes/pits in bead]
+  // which must become:
+  //   PORO["POROSITY<br/>Holes/pits in bead"]
+  code = fixMultilineNodes(code);
+
+  // [[ inside node text (Mermaid interprets as subroutine shape)
   code = code.replace(/\[\[(\w)/g, "[($1");
-  // 2. /!\ warning symbol (not valid in Mermaid)
+  // /!\ warning symbol (not valid in Mermaid)
   code = code.replace(/\/!\\/g, "WARNING:");
-  // 3. Unbalanced brackets in node labels - escape inner brackets
-  // 4. Long dashes that break parsing
+  // Long box-drawing dashes that break parsing
   code = code.replace(/─{3,}/g, "---");
 
   return code;
@@ -84,6 +195,10 @@ export function MermaidViewer({ code, title }: Props) {
   }, []);
 
   const cleanCode = sanitizeMermaid(code);
+
+  // Detect truncated code (incomplete AI output)
+  const isTruncated = detectTruncation(cleanCode);
+
   const escaped = cleanCode
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -220,7 +335,19 @@ try {
           {title}
         </div>
       )}
-      {error ? (
+      {isTruncated ? (
+        <div className="p-4">
+          <div className="flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-medium">Diagram was cut off</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
+                The AI response was truncated before the diagram was complete. Ask it to regenerate.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : error ? (
         <div className="p-4">
           <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />

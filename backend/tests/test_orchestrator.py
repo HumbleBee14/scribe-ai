@@ -105,26 +105,12 @@ def test_emit_tool_specific_events_page_image() -> None:
     assert "page_13" in image_events[0]["data"]["url"]
 
 
-def test_emit_tool_specific_events_artifact() -> None:
-    """render_artifact should emit artifact event with source pages."""
-    orch = AgentOrchestrator()
-    session = Session(id="test")
+def test_render_artifact_removed_from_tools() -> None:
+    """render_artifact is no longer an active tool (artifacts are inline tags now)."""
+    from app.agent.tools import get_active_tools
 
-    events = orch._emit_tool_specific_events(
-        "render_artifact",
-        {
-            "type": "svg",
-            "title": "TIG Polarity",
-            "code": "<svg>...</svg>",
-            "source_pages": [{"page": 24, "description": "TIG setup"}],
-        },
-        session,
-    )
-
-    artifact_events = [e for e in events if e["event"] == "artifact"]
-    assert len(artifact_events) == 1
-    assert artifact_events[0]["data"]["title"] == "TIG Polarity"
-    assert artifact_events[0]["data"]["source_pages"][0]["page"] == 24
+    active_names = [t["name"] for t in get_active_tools()]
+    assert "render_artifact" not in active_names
 
 
 @pytest.mark.asyncio

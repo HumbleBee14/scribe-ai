@@ -30,7 +30,7 @@ def test_mcp_error_format() -> None:
 
 
 def test_all_mcp_tools_count() -> None:
-    assert len(ALL_MCP_TOOLS) == 10
+    assert len(ALL_MCP_TOOLS) == 9  # render_artifact removed (now inline tags)
 
 
 def test_create_knowledge_mcp_server() -> None:

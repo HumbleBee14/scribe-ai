@@ -255,46 +255,6 @@ async def mcp_diagnose_weld(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
-    "render_artifact",
-    (
-        "Generate an interactive visual artifact (diagram, calculator, flowchart). "
-        "USE when a visual explanation would be clearer than text. "
-        "ALWAYS include source_pages to ground the artifact in manual evidence."
-    ),
-    {
-        "type": "object",
-        "properties": {
-            "type": {
-                "type": "string",
-                "enum": ["mermaid", "svg", "table", "html"],
-            },
-            "title": {
-                "type": "string",
-            },
-            "code": {
-                "type": "string",
-                "description": "The renderable content (Mermaid, SVG markup, HTML)",
-            },
-            "source_pages": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "page": {"type": "integer"},
-                        "description": {"type": "string"},
-                    },
-                },
-                "description": "Manual pages this artifact is grounded in. REQUIRED.",
-            },
-        },
-        "required": ["type", "title", "code", "source_pages"],
-    },
-)
-async def mcp_render_artifact(args: dict[str, Any]) -> dict[str, Any]:
-    return _run_tool("render_artifact", args)
-
-
-@tool(
     "search_manual",
     (
         "Search the product manual for relevant information using text search. "
@@ -333,7 +293,7 @@ ALL_MCP_TOOLS = [
     mcp_clarify_question,
     mcp_get_page_image,
     mcp_diagnose_weld,
-    mcp_render_artifact,
+    # mcp_render_artifact removed: artifacts are now inline <artifact> tags
     mcp_search_manual,
 ]
 

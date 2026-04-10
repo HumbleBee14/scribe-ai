@@ -23,7 +23,6 @@ def test_active_tools_have_working_backends() -> None:
         "clarify_question",
         "get_page_image",
         "diagnose_weld",
-        "render_artifact",
         "search_manual",
     ]
     for name in expected_active:

@@ -207,47 +207,6 @@ TOOL_DEFINITIONS: list[dict] = [
             "required": ["weld_type", "symptoms"],
         },
     },
-    {
-        "name": "render_artifact",
-        "description": (
-            "Generate an interactive visual artifact (diagram, calculator, flowchart, etc). "
-            "USE when a visual explanation would be clearer than text. "
-            "ALWAYS include source_pages to ground the artifact in manual evidence."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "type": {
-                    "type": "string",
-                    "enum": ["mermaid", "svg", "table", "html"],
-                    "description": "Artifact rendering type",
-                },
-                "title": {
-                    "type": "string",
-                    "description": "Display title for the artifact",
-                },
-                "code": {
-                    "type": "string",
-                    "description": (
-                        "The renderable content "
-                        "(Mermaid code, SVG markup, HTML, etc)"
-                    ),
-                },
-                "source_pages": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "page": {"type": "integer"},
-                            "description": {"type": "string"},
-                        },
-                    },
-                    "description": "Manual pages this artifact is grounded in. REQUIRED.",
-                },
-            },
-            "required": ["type", "title", "code", "source_pages"],
-        },
-    },
 ]
 
 # Tools deferred until their backend is implemented (Phase 6/8).
@@ -313,7 +272,6 @@ ACTIVE_TOOL_NAMES = frozenset(
         "clarify_question",
         "get_page_image",
         "diagnose_weld",
-        "render_artifact",
         "search_manual",
     }
 )
@@ -431,15 +389,6 @@ def _execute_uncached(name: str, params: dict) -> dict:
             "note": "Compare weld appearance against diagnosis diagrams on these pages",
         }
 
-    if name == "render_artifact":
-        return {
-            "id": f"art_{hash(params['title']) % 100000:05d}",
-            "type": params["type"],
-            "title": params["title"],
-            "code": params["code"],
-            "source_pages": params.get("source_pages", []),
-        }
-
     if name == "search_manual":
         retrieval = get_retrieval_service()
         query_text = params.get("query", "")
@@ -510,7 +459,7 @@ def _execute_cached(name: str, params_json: str) -> str:
 def execute_tool(name: str, params: dict) -> dict:
     """Execute a tool with LRU caching for deterministic results."""
     # Don't cache non-deterministic tools
-    non_cacheable = {"clarify_question", "render_artifact", "search_manual"}
+    non_cacheable = {"clarify_question", "search_manual"}
     if name in non_cacheable:
         return _finalize_tool_result(name, _execute_uncached(name, params))
 
