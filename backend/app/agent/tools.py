@@ -1,8 +1,8 @@
 """Generic agent tools for product manual Q&A.
 
 These tools work for ANY product - they use the database and page analysis
-built during ingestion. Domain-specific tools (like welding lookup) can be
-added as product adapters later.
+built during ingestion. Domain-specific tools can be added as product
+adapters later.
 """
 from __future__ import annotations
 
@@ -109,8 +109,31 @@ TOOL_DEFINITIONS: list[dict] = [
 ]
 
 
+def _log_result(name: str, result: dict) -> dict:
+    """Log tool result summary and return it."""
+    if "error" in result:
+        print(f"[TOOL] {name} -> ERROR: {result['error']}", flush=True)
+    elif name == "search_manual":
+        hits = result.get("results", [])
+        pages = [(r["source_id"], r["page"]) for r in hits[:5]]
+        print(f"[TOOL] {name} -> {len(hits)} results: {pages}", flush=True)
+    elif name == "get_page_text":
+        pages = [(p["source_id"], p["page"]) for p in result.get("pages", [])]
+        chars = sum(len(p.get("text", "")) for p in result.get("pages", []))
+        print(f"[TOOL] {name} -> {len(pages)} pages, {chars} chars: {pages}", flush=True)
+    elif name == "get_page_image":
+        print(f"[TOOL] {name} -> {result.get('source_id')}/page {result.get('page')}", flush=True)
+    elif name == "clarify_question":
+        print(f"[TOOL] {name} -> \"{result.get('question', '')}\"", flush=True)
+    else:
+        print(f"[TOOL] {name} -> {json.dumps(result, default=str)[:200]}", flush=True)
+    return result
+
+
 def execute_tool(name: str, params: dict) -> dict:
     """Execute a tool by name with given parameters."""
+    print(f"\n[TOOL CALL] {name} args={json.dumps(params, default=str)}", flush=True)
+
     runtime = get_active_product()
     product_id = runtime.id
 
@@ -118,8 +141,8 @@ def execute_tool(name: str, params: dict) -> dict:
         query = params.get("query", "")
         results = db.search_pages_fts(product_id, query, limit=8)
         if not results:
-            return {"results": [], "message": "No matching pages found."}
-        return {
+            return _log_result(name, {"results": [], "message": "No matching pages found."})
+        return _log_result(name, {
             "results": [
                 {
                     "source_id": r["source_id"],
@@ -129,15 +152,15 @@ def execute_tool(name: str, params: dict) -> dict:
                 }
                 for r in results
             ]
-        }
+        })
 
     if name == "get_page_text":
         source_id = params.get("source_id", "")
         pages = params.get("pages", [])
         results = db.get_page_detailed_text(product_id, source_id, pages)
         if not results:
-            return {"error": "No page content found."}
-        return {
+            return _log_result(name, {"error": "No page content found."})
+        return _log_result(name, {
             "pages": [
                 {
                     "source_id": r["source_id"],
@@ -146,21 +169,21 @@ def execute_tool(name: str, params: dict) -> dict:
                 }
                 for r in results
             ]
-        }
+        })
 
     if name == "get_page_image":
         source_id = params.get("source_id", "")
         page = params.get("page", 1)
-        return {
+        return _log_result(name, {
             "page": page,
             "source_id": source_id,
             "url": f"/api/products/{product_id}/assets/pages/{source_id}/page_{page:02d}.png",
-        }
+        })
 
     if name == "clarify_question":
-        return {
+        return _log_result(name, {
             "question": params.get("question", ""),
             "options": params.get("options"),
-        }
+        })
 
-    return {"error": f"Unknown tool: {name}"}
+    return _log_result(name, {"error": f"Unknown tool: {name}"})

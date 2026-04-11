@@ -9,6 +9,8 @@ interface DialogShellProps {
   subtitle?: string;
   onClose: () => void;
   children: ReactNode;
+  /** Pinned below the scroll area; use for primary actions so they stay visible. */
+  footer?: ReactNode;
   sizeClassName?: string;
   panelClassName?: string;
   contentClassName?: string;
@@ -19,16 +21,21 @@ export function DialogShell({
   subtitle,
   onClose,
   children,
+  footer,
   sizeClassName = "max-w-4xl",
   panelClassName = "",
-  contentClassName = "flex-1 overflow-auto",
+  /** Appended inside the scroll region; base styles always include flex-1 min-h-0 overflow-y-auto. */
+  contentClassName = "",
 }: DialogShellProps) {
   const titleId = useId();
   const descriptionId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     const previousActive = document.activeElement as HTMLElement | null;
@@ -105,7 +112,24 @@ export function DialogShell({
             <X suppressHydrationWarning className="h-4 w-4" />
           </button>
         </div>
-        <div className={contentClassName}>{children}</div>
+        {footer != null ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div
+              className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${contentClassName}`.trim()}
+            >
+              {children}
+            </div>
+            <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 shadow-[0_-6px_16px_-8px_rgba(0,0,0,0.12)] dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_-6px_16px_-8px_rgba(0,0,0,0.35)] sm:px-6">
+              {footer}
+            </div>
+          </div>
+        ) : (
+          <div
+            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${contentClassName}`.trim()}
+          >
+            {children}
+          </div>
+        )}
       </div>
     </div>
   );

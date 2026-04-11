@@ -33,6 +33,7 @@ class CreateProductRequest(BaseModel):
 class UpdateProductRequest(BaseModel):
     description: str | None = None
     categories: list[str] | None = None
+    custom_prompt: str | None = None
 
 
 def _serialize_product(product_id: str) -> dict[str, object]:
@@ -54,6 +55,7 @@ def _serialize_product(product_id: str) -> dict[str, object]:
         "domain": row["domain"],
         "status": row["status"],
         "categories": row["categories"],
+        "custom_prompt": row.get("custom_prompt", ""),
         "seeded": False,
         "primary_source_id": row["sources"][0]["source_id"] if row["sources"] else None,
         "document_count": len(row["sources"]),
@@ -108,6 +110,8 @@ def update_product_api(product_id: str, request: UpdateProductRequest) -> dict[s
     updates: dict = {}
     if request.description is not None:
         updates["description"] = request.description.strip()
+    if request.custom_prompt is not None:
+        updates["custom_prompt"] = request.custom_prompt.strip()
     if updates:
         db.update_product(product_id, **updates)
     if request.categories is not None:

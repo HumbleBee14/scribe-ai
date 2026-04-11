@@ -167,7 +167,7 @@ function DocumentPreviewModal({
       subtitle={subtitle}
       onClose={onClose}
       sizeClassName="max-w-4xl"
-      contentClassName="flex-1 overflow-auto p-6 bg-gray-50 dark:bg-neutral-950"
+      contentClassName="p-6 bg-gray-50 dark:bg-neutral-950"
     >
       <div className={`${pages.length > 1 ? "space-y-4" : "flex items-center justify-center min-h-full"}`}>
         {pages.map((p) => (

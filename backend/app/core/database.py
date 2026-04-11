@@ -58,6 +58,7 @@ def init_db() -> None:
             logo_path TEXT,
             manufacturer TEXT,
             item_number TEXT,
+            custom_prompt TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -164,6 +165,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("sources", "chunks_extracted", "INTEGER DEFAULT 0"),
         ("sources", "processing_error", "TEXT"),
         ("page_analysis", "filename", "TEXT DEFAULT ''"),
+        ("products", "custom_prompt", "TEXT DEFAULT ''"),
     ]
     for table, column, coltype in migrations:
         try:

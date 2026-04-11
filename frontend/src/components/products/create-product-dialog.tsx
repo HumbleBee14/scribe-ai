@@ -17,6 +17,7 @@ import {
   fetchProduct,
   getProductIngestionStatus,
   ProductSummary,
+  startProductIngestion,
   updateProduct,
   uploadProductDocuments,
   uploadProductLogo,
@@ -42,6 +43,7 @@ export function CreateProductDialog({ open, editMode, initialData, onClose, onCr
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [categoryInput, setCategoryInput] = useState("");
   const [categories, setCategories] = useState<string[]>(initialData?.categories ?? []);
+  const [customPrompt, setCustomPrompt] = useState(initialData?.custom_prompt ?? "");
   const [logo, setLogo] = useState<File | null>(null);
 
   // Create mode: local file queue (uploaded on submit)
@@ -62,6 +64,7 @@ export function CreateProductDialog({ open, editMode, initialData, onClose, onCr
 
   const fileRef = useRef<HTMLInputElement>(null);
   const logoRef = useRef<HTMLInputElement>(null);
+  const confirmDeleteRef = useRef<HTMLDivElement>(null);
 
   const productId = editMode ? initialData?.id : undefined;
   const uploadingCount = [...fileStatuses.values()].filter((s) => s === "uploading").length;
@@ -81,6 +84,21 @@ export function CreateProductDialog({ open, editMode, initialData, onClose, onCr
     }, 2000);
     return () => clearInterval(interval);
   }, [processingStatus, productId]);
+
+  // When delete confirmation appears, scroll the dialog body so the panel is visible above the sticky footer.
+  useEffect(() => {
+    if (!open || !confirmDelete) return;
+    const id = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        confirmDeleteRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+          inline: "nearest",
+        });
+      });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [open, confirmDelete]);
 
   if (!open) return null;
 
@@ -166,6 +184,7 @@ export function CreateProductDialog({ open, editMode, initialData, onClose, onCr
         await updateProduct(productId, {
           description: description.trim(),
           categories,
+          custom_prompt: customPrompt.trim(),
         });
         if (logo) {
           setSubmitProgress("Uploading logo...");
@@ -207,8 +226,50 @@ export function CreateProductDialog({ open, editMode, initialData, onClose, onCr
       title={editMode ? "Edit product" : "Create product workspace"}
       subtitle={editMode ? "Update product details and manage manuals." : "Set up a new product profile with manuals for AI-powered Q&A."}
       onClose={() => !isSubmitting && !isUploading && onClose()}
-      sizeClassName="max-w-lg"
-      contentClassName="p-5 space-y-5"
+      sizeClassName={editMode ? "max-w-2xl" : "max-w-lg"}
+      contentClassName="p-5 pb-4 space-y-5"
+      footer={
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {submitProgress ? (
+              <span className="inline-flex items-center gap-1.5 text-xs text-orange-500">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                {submitProgress}
+              </span>
+            ) : editMode && initialData && !confirmDelete ? (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                disabled={isSubmitting || isUploading}
+                title="Delete this product and all its data"
+                aria-label="Delete this product and all its data"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-200 text-red-600 transition-colors hover:bg-red-50 disabled:opacity-40 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/40"
+              >
+                <Trash2 suppressHydrationWarning className="h-4 w-4" aria-hidden />
+              </button>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting || isUploading}
+              className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={isSubmitting || !name.trim() || isUploading}
+              className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-60"
+            >
+              {isSubmitting && <Loader2 suppressHydrationWarning className="h-4 w-4 animate-spin" />}
+              {editMode ? "Save changes" : "Create workspace"}
+            </button>
+          </div>
+        </div>
+      }
     >
       {/* Product name */}
       <div className="space-y-1.5">
@@ -269,6 +330,25 @@ export function CreateProductDialog({ open, editMode, initialData, onClose, onCr
           </div>
         )}
       </div>
+
+      {/* Custom system prompt (optional) */}
+      {editMode && (
+        <div className="space-y-1.5">
+          <label className="block text-xs font-semibold text-gray-700 dark:text-neutral-300">
+            System prompt <span className="font-normal text-gray-400 dark:text-neutral-500">(optional)</span>
+          </label>
+          <textarea
+            value={customPrompt}
+            onChange={(e) => setCustomPrompt(e.target.value)}
+            rows={3}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-xs text-gray-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 dark:focus:ring-orange-900"
+            placeholder="Custom instructions for the AI assistant. Leave empty to use the default generic prompt. Example: 'You are a welding expert. Always mention safety warnings. Refer to specific page numbers.'"
+          />
+          <p className="text-[10px] text-gray-400 dark:text-neutral-500">
+            If set, this prompt is used instead of the default. The document map and tools are always included.
+          </p>
+        </div>
+      )}
 
       {/* Logo */}
       <div className="space-y-1.5">
@@ -378,16 +458,11 @@ export function CreateProductDialog({ open, editMode, initialData, onClose, onCr
         </div>
       )}
 
-      {/* Delete (edit mode only) */}
-      {editMode && initialData && !confirmDelete && (
-        <div className="border-t border-gray-200 pt-4 dark:border-neutral-700">
-          <button type="button" onClick={() => setConfirmDelete(true)} className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors">
-            Delete this product and all its data
-          </button>
-        </div>
-      )}
       {editMode && confirmDelete && initialData && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/50">
+        <div
+          ref={confirmDeleteRef}
+          className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/50"
+        >
           <p className="text-sm font-medium text-red-700 dark:text-red-300">Are you sure? This will permanently delete:</p>
           <ul className="mt-1.5 text-xs text-red-600 dark:text-red-400 space-y-0.5 list-disc list-inside">
             <li>All uploaded manuals and page images</li>
@@ -415,33 +490,6 @@ export function CreateProductDialog({ open, editMode, initialData, onClose, onCr
           </div>
         </div>
       )}
-
-      {/* Action buttons */}
-      <div className="flex items-center justify-between gap-2 pt-2">
-        {/* Submit progress */}
-        <div className="min-w-0">
-          {submitProgress && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-orange-500">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              {submitProgress}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={onClose} disabled={isSubmitting || isUploading} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSubmit()}
-            disabled={isSubmitting || !name.trim() || isUploading}
-            className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-60"
-          >
-            {isSubmitting && <Loader2 suppressHydrationWarning className="h-4 w-4 animate-spin" />}
-            {editMode ? "Save changes" : "Create workspace"}
-          </button>
-        </div>
-      </div>
     </DialogShell>
   );
 }

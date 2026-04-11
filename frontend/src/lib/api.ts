@@ -34,6 +34,7 @@ export interface ProductSummary {
   logo_url?: string | null;
   domain: string;
   categories: string[];
+  custom_prompt: string;
   status: string;
   seeded: boolean;
   primary_source_id?: string | null;
@@ -150,7 +151,7 @@ export async function deleteProduct(productId: string): Promise<void> {
   }
 }
 
-export async function updateProduct(productId: string, updates: { description?: string; categories?: string[] }): Promise<ProductSummary> {
+export async function updateProduct(productId: string, updates: { description?: string; categories?: string[]; custom_prompt?: string }): Promise<ProductSummary> {
   const res = await fetch(buildBackendUrl(`/api/products/${productId}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

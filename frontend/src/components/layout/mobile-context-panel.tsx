@@ -30,7 +30,7 @@ export function MobileContextPanel({
       subtitle="Session state, sources, and generated artifacts"
       onClose={onClose}
       sizeClassName="max-w-2xl"
-      contentClassName="flex-1 overflow-auto p-4 space-y-6 bg-gray-50 dark:bg-neutral-950"
+      contentClassName="p-4 space-y-6 bg-gray-50 dark:bg-neutral-950"
     >
       <SessionSidebar session={session} />
       <SourceViewer

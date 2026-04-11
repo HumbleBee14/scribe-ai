@@ -33,7 +33,7 @@ export function ArtifactModal({ type, title, code, onClose }: ArtifactModalProps
       onClose={onClose}
       sizeClassName="max-w-5xl"
       panelClassName="h-[90vh]"
-      contentClassName="flex-1 min-h-0 bg-gray-50 dark:bg-neutral-950 [&>div]:h-full [&>div]:!rounded-none [&>div]:!border-0 [&_iframe]:!h-full"
+      contentClassName="bg-gray-50 dark:bg-neutral-950 [&>div]:h-full [&>div]:!rounded-none [&>div]:!border-0 [&_iframe]:!h-full"
     >
       {renderArtifactByType(type, code)}
     </DialogShell>
