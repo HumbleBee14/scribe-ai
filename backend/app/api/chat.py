@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field
 from app.agent.orchestrator import AgentOrchestrator
 from app.packs.registry import get_product_registry
 from app.session.manager import session_manager
-from app.session.summary import persist_session_summary
 
 logger = logging.getLogger(__name__)
 
@@ -100,12 +99,12 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
             assistant_message = "".join(assistant_chunks).strip()
             if status == "completed" and assistant_message:
                 session_manager.append_turn(session, request.message, assistant_message)
-                persist_session_summary(runtime, session)
+                pass  # TODO: session summary persistence
             elif status == "clarification_required" and clarification_question:
                 session_manager.append_turn(
                     session, request.message, clarification_question
                 )
-                persist_session_summary(runtime, session)
+                pass  # TODO: session summary persistence
         yield _sse_event(event["event"], event["data"])
 
 

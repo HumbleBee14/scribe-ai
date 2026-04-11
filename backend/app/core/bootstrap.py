@@ -18,6 +18,20 @@ from app.core.database import init_db
 logger = logging.getLogger(__name__)
 
 
+def _setup_logging() -> None:
+    """Configure logging to console + file so ingestion logs are visible and persisted."""
+    log_fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    logging.basicConfig(level=logging.INFO, format=log_fmt)
+
+    # Also log to file for debugging background tasks
+    log_path = DATA_DIR / "server.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(str(log_path), encoding="utf-8")
+    file_handler.setFormatter(logging.Formatter(log_fmt))
+    file_handler.setLevel(logging.INFO)
+    logging.getLogger().addHandler(file_handler)
+
+
 def _process_pending_products() -> None:
     """Check for any pending source documents across all products and process them."""
     from app.core import database as db
@@ -37,6 +51,7 @@ def _process_pending_products() -> None:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    _setup_logging()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     PRODUCTS_DIR.mkdir(parents=True, exist_ok=True)
     init_db()

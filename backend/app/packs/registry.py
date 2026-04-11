@@ -20,12 +20,6 @@ _active_runtime: ContextVar[ProductRuntime | None] = ContextVar("active_product_
 _PRODUCT_SUBDIRS = [
     "files",
     "assets/pages",
-    "assets/figures",
-    "structured",
-    "index",
-    "graph",
-    "jobs",
-    "conversations",
 ]
 
 
@@ -291,37 +285,6 @@ class ProductRegistry:
         self._write_manifest(runtime, manifest)
         return self.require_product(product_id)
 
-    def save_status(self, product_id: str, status: IngestionStatus) -> None:
-        runtime = self.require_product(product_id)
-        runtime.jobs_dir.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "product_id": status.product_id,
-            "status": status.status,
-            "stage": status.stage,
-            "progress": status.progress,
-            "message": status.message,
-            "error": status.error,
-        }
-        (runtime.jobs_dir / "ingestion-status.yaml").write_text(
-            yaml.safe_dump(payload, sort_keys=False),
-            encoding="utf-8",
-        )
-
-    def load_status(self, product_id: str) -> IngestionStatus:
-        runtime = self.require_product(product_id)
-        path = runtime.jobs_dir / "ingestion-status.yaml"
-        if not path.exists():
-            return IngestionStatus(product_id=product_id, status=runtime.status, stage="idle")
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        return IngestionStatus(
-            product_id=product_id,
-            status=str(data.get("status", runtime.status)),
-            stage=str(data.get("stage", "idle")),
-            progress=float(data.get("progress", 0.0)),
-            message=str(data.get("message", "")),
-            error=data.get("error"),
-        )
-
     def update_manifest_status(self, product_id: str, status: str) -> None:
         runtime = self.require_product(product_id)
         manifest = self._load_manifest(runtime.manifest_path)
@@ -362,13 +325,7 @@ class ProductRegistry:
             manifest=manifest,
             root_dir=root_dir,
             manifest_path=manifest_path,
-            structured_dir=root_dir / "structured",
-            index_dir=root_dir / "index",
-            graph_dir=root_dir / "graph",
             pages_dir=root_dir / "assets" / "pages",
-            figures_dir=root_dir / "assets" / "figures",
-            jobs_dir=root_dir / "jobs",
-            conversations_dir=root_dir / "conversations",
         )
 
     def _load_manifest(self, manifest_path: Path) -> dict:

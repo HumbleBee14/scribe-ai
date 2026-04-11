@@ -38,12 +38,16 @@ def main() -> None:
     #
     # The default loop="auto" resolves to SelectorEventLoop when --reload is set
     # (use_subprocess=True), which breaks subprocess creation on Windows.
+    # Exclude .venv from watchfiles to prevent restarts during pip installs
+    # or model downloads (sentence-transformers, etc.)
     uvicorn.run(
         "app.main:app",
         host=args.host,
         port=args.port,
         reload=args.reload,
+        reload_excludes=[".venv/*", "*.pyc", "__pycache__/*"] if args.reload else None,
         loop="none",
+        log_level="info",
     )
 
 

@@ -16,7 +16,6 @@ from claude_agent_sdk import (
 
 from app.agent.prompts import build_system_prompt
 from app.agent.tools_mcp import MCP_SERVER_NAME, create_knowledge_mcp_server
-from app.context.assembler import ContextAssembler
 from app.core.config import settings
 from app.packs.models import ProductRuntime
 from app.packs.registry import get_product_registry, use_product_runtime

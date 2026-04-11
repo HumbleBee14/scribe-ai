@@ -51,13 +51,7 @@ class ProductRuntime:
     manifest: ProductManifest
     root_dir: Path
     manifest_path: Path
-    structured_dir: Path
-    index_dir: Path
-    graph_dir: Path
     pages_dir: Path
-    figures_dir: Path
-    jobs_dir: Path
-    conversations_dir: Path
 
     @property
     def id(self) -> str:

@@ -12,10 +12,9 @@ import threading
 from fastapi import BackgroundTasks
 
 from app.core import database as db
-from app.ingest.pipeline import ingest_single_source, rebuild_merged_index
-from app.packs.models import IngestionStatus, PackSource
+from app.ingest.pipeline import ingest_single_source
+from app.packs.models import IngestionStatus
 from app.packs.registry import get_product_registry
-from app.retrieval.service import reset_retrieval_service
 
 logger = logging.getLogger(__name__)
 
@@ -55,21 +54,21 @@ def enqueue_ingestion(product_id: str, background_tasks: BackgroundTasks) -> Ing
 
 
 def process_single_document(product_id: str, source_id: str) -> None:
-    """Process one source document. Updates per-source and product-level status."""
+    """Process one source document through all 3 stages."""
     lock = _get_lock(f"{product_id}:{source_id}")
     if not lock.acquire(blocking=False):
         logger.info("Already processing %s/%s, skipping", product_id, source_id)
         return
 
     try:
-        logger.info("Processing document: %s/%s", product_id, source_id)
+        print(f"\n[JOB] Starting document ingestion: {product_id}/{source_id}", flush=True)
         db.update_source_processing(product_id, source_id, "processing")
 
         registry = get_product_registry()
         registry._cache.pop(product_id, None)
         runtime = registry.require_product(product_id)
 
-        # Find the source in the manifest
+        # Find the source
         source = next(
             (s for s in runtime.manifest.sources if s.id == source_id),
             None,
@@ -79,34 +78,24 @@ def process_single_document(product_id: str, source_id: str) -> None:
                 product_id, source_id, "failed",
                 error=f"Source {source_id} not found in manifest",
             )
-            _check_product_complete(product_id, runtime)
+            _check_product_complete(product_id)
             return
 
+        # Run the 3-stage pipeline
         stats = ingest_single_source(runtime, source)
 
-        # Update source with results
+        # Mark source as done
         db.update_source_processing(
             product_id, source_id, "done",
             pages_rendered=stats["pages_rendered"],
-            chunks_extracted=stats["chunks_extracted"],
+            chunks_extracted=stats["pages_analyzed"],
         )
 
-        # Update page count in sources table
-        if stats["pages_rendered"] > 0:
-            conn = db._get_conn()
-            conn.execute(
-                "UPDATE sources SET pages = ? WHERE product_id = ? AND source_id = ?",
-                (stats["pages_rendered"], product_id, source_id),
-            )
-            conn.commit()
-
-        logger.info(
-            "Document processed: %s/%s - %d pages, %d chunks",
-            product_id, source_id, stats["pages_rendered"], stats["chunks_extracted"],
-        )
+        print(f"[JOB] Document done: {product_id}/{source_id}", flush=True)
 
     except Exception as exc:
-        logger.exception("Failed to process %s/%s", product_id, source_id)
+        print(f"[JOB] Document FAILED: {product_id}/{source_id} - {exc}", flush=True)
+        logger.exception("Ingestion failed: %s/%s", product_id, source_id)
         db.update_source_processing(
             product_id, source_id, "failed",
             error=str(exc),
@@ -114,31 +103,17 @@ def process_single_document(product_id: str, source_id: str) -> None:
 
     finally:
         lock.release()
-        # After each document completes, check if all are done
-        registry = get_product_registry()
-        registry._cache.pop(product_id, None)
-        runtime = registry.require_product(product_id)
-        _check_product_complete(product_id, runtime)
+        _check_product_complete(product_id)
 
 
-def _check_product_complete(product_id: str, runtime) -> None:
-    """If all sources are processed, mark product ready and rebuild merged index."""
+def _check_product_complete(product_id: str) -> None:
+    """If all sources are processed, mark product ready."""
     if db.all_sources_processed(product_id):
-        total_chunks = rebuild_merged_index(runtime)
         db.update_product_status(product_id, "ready")
-        reset_retrieval_service()
-        logger.info(
-            "Product %s ready: merged index has %d chunks",
-            product_id, total_chunks,
-        )
+        logger.info("Product %s: all sources processed, status -> ready", product_id)
     else:
-        # Still processing other documents
         pending = db.get_pending_sources(product_id)
-        if not pending:
-            # No pending but not all done = some failed
-            sources = db.get_sources(product_id)
-            failed = [s for s in sources if s["processing_status"] == "failed"]
-            if failed:
-                logger.warning(
-                    "Product %s has %d failed sources", product_id, len(failed)
-                )
+        sources = db.get_sources(product_id)
+        failed = [s for s in sources if s.get("processing_status") == "failed"]
+        if not pending and failed:
+            logger.warning("Product %s: %d sources failed", product_id, len(failed))

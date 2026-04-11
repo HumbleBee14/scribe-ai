@@ -22,22 +22,6 @@ from app.packs.registry import get_product_registry, _slugify, _ensure_product_d
 router = APIRouter(prefix="/api/products", tags=["products"])
 
 
-def _rebuild_merged_chunks(product_dir: Path) -> None:
-    """Merge all per-source chunks.json into a single merged_chunks.json for search."""
-    index_dir = product_dir / "index"
-    merged: list[dict] = []
-    for source_dir in sorted(index_dir.iterdir()):
-        if not source_dir.is_dir():
-            continue
-        chunks_path = source_dir / "chunks.json"
-        if chunks_path.exists():
-            try:
-                chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
-                merged.extend(chunks)
-            except (json.JSONDecodeError, OSError):
-                pass
-    merged_path = index_dir / "chunks.json"
-    merged_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 class CreateProductRequest(BaseModel):
@@ -314,17 +298,14 @@ def delete_document_api(product_id: str, source_id: str) -> dict[str, object]:
         if file_path.exists():
             file_path.unlink()
 
-    # Remove per-source derived data: pages, figures, chunks
-    for subpath in [
-        product_dir / "assets" / "pages" / source_id,
-        product_dir / "assets" / "figures" / source_id,
-        product_dir / "index" / source_id,
-    ]:
-        if subpath.exists():
-            shutil.rmtree(subpath)
+    # Remove rendered page images for this source
+    pages_dir = product_dir / "assets" / "pages" / source_id
+    if pages_dir.exists():
+        shutil.rmtree(pages_dir)
 
-    # Rebuild merged chunks from remaining sources
-    _rebuild_merged_chunks(product_dir)
+    # Remove page analysis and embeddings from DB for this source
+    db.delete_page_analysis_for_source(product_id, source_id)
+    db.delete_toc_for_source(product_id, source_id)
 
     # Reset status
     remaining = db.get_source_count(product_id)
@@ -419,21 +400,6 @@ def get_page_asset(product_id: str, source_id: str, filename: str) -> FileRespon
         raise HTTPException(status_code=404, detail="Page image not found")
     return FileResponse(path)
 
-
-@router.get("/{product_id}/assets/figures/{filename}")
-def get_figure_asset(product_id: str, filename: str) -> FileResponse:
-    registry = get_product_registry()
-    try:
-        runtime = registry.require_product(product_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-    path = (runtime.figures_dir / Path(filename).name).resolve()
-    if not str(path).startswith(str(runtime.figures_dir.resolve())):
-        raise HTTPException(status_code=400, detail="Invalid path")
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Figure not found")
-    return FileResponse(path)
 
 
 @router.get("/{product_id}/assets/logo")
