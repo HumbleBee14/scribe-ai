@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Vulcan OmniPro 220 Assistant",
-  description: "Multimodal support agent for the Vulcan OmniPro 220 welding system.",
+  title: "Prox — Manual workspaces",
+  description:
+    "Ask your product manual. Your live guide for accurate, source-backed answers.",
 };
 
 const themeInitScript = `

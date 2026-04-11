@@ -62,8 +62,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="ProductManualQnA API",
-        description="Local-first multimodal reasoning platform for product manuals",
+        title="Prox API",
+        description="Local-first multimodal reasoning for product manuals and workspaces",
         version="0.1.0",
         lifespan=_lifespan,
     )
