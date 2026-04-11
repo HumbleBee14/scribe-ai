@@ -9,20 +9,24 @@ from typing import Iterator
 
 import yaml
 
-from app.core.config import (
-    BACKEND_DIR,
-    DATA_DIR,
-    FILES_DIR,
-    KNOWLEDGE_DIR,
-    PROJECT_ROOT,
-    settings,
-)
+from app.core.config import DATA_DIR, settings
 from app.packs.models import IngestionStatus, PackSource, ProductManifest, ProductRuntime
 
-SEEDED_PACKS_DIR = DATA_DIR / "document-packs"
-USER_PRODUCTS_DIR = DATA_DIR / "products"
+PRODUCTS_DIR = DATA_DIR / "products"
 
 _active_runtime: ContextVar[ProductRuntime | None] = ContextVar("active_product_runtime", default=None)
+
+# Standard subdirectories created for every product
+_PRODUCT_SUBDIRS = [
+    "files",
+    "assets/pages",
+    "assets/figures",
+    "structured",
+    "index",
+    "graph",
+    "jobs",
+    "conversations",
+]
 
 
 def _slugify(value: str) -> str:
@@ -37,6 +41,12 @@ def _derive_source_id(raw: dict, index: int) -> str:
         return _slugify(str(raw["type"]))
     path = raw.get("path", f"source-{index + 1}")
     return _slugify(Path(str(path)).stem)
+
+
+def _ensure_product_dirs(root: Path) -> None:
+    """Create all standard subdirectories for a product. Safe on any OS."""
+    for subdir in _PRODUCT_SUBDIRS:
+        (root / subdir).mkdir(parents=True, exist_ok=True)
 
 
 def _default_quick_actions(domain: str) -> list[dict[str, str]]:
@@ -80,28 +90,20 @@ def _default_quick_actions(domain: str) -> list[dict[str, str]]:
 
 
 class ProductRegistry:
-    def __init__(
-        self,
-        seeded_dir: Path = SEEDED_PACKS_DIR,
-        user_dir: Path = USER_PRODUCTS_DIR,
-    ) -> None:
-        self._seeded_dir = seeded_dir
-        self._user_dir = user_dir
+    def __init__(self, products_dir: Path = PRODUCTS_DIR) -> None:
+        self._products_dir = products_dir
         self._cache: dict[str, ProductRuntime] = {}
 
     def ensure_storage(self) -> None:
-        self._user_dir.mkdir(parents=True, exist_ok=True)
+        self._products_dir.mkdir(parents=True, exist_ok=True)
 
     def list_products(self) -> list[ProductRuntime]:
         runtimes: list[ProductRuntime] = []
-        manifests = sorted(self._seeded_dir.glob("*/pack.yaml")) + sorted(
-            self._user_dir.glob("*/pack.yaml")
-        )
-        for manifest_path in manifests:
+        for manifest_path in sorted(self._products_dir.glob("*/pack.yaml")):
             runtime = self.load_product(manifest_path.parent.name)
             if runtime is not None:
                 runtimes.append(runtime)
-        return sorted(runtimes, key=lambda runtime: (runtime.seeded is False, runtime.product_name.lower()))
+        return sorted(runtimes, key=lambda r: r.product_name.lower())
 
     def load_product(self, product_id: str | None) -> ProductRuntime | None:
         if product_id is None:
@@ -109,8 +111,8 @@ class ProductRegistry:
         if product_id in self._cache:
             return self._cache[product_id]
 
-        manifest_path = self._find_manifest_path(product_id)
-        if manifest_path is None:
+        manifest_path = self._products_dir / product_id / "pack.yaml"
+        if not manifest_path.exists():
             return None
 
         runtime = self._build_runtime(manifest_path)
@@ -123,23 +125,16 @@ class ProductRegistry:
             raise KeyError(f"Unknown product: {product_id}")
         return runtime
 
-    def create_product(self, name: str, description: str = "") -> ProductRuntime:
+    def create_product(self, name: str, description: str = "", categories: list[str] | None = None) -> ProductRuntime:
         product_id = _slugify(name)
-        root_dir = self._user_dir / product_id
+        root_dir = self._products_dir / product_id
         suffix = 2
         while root_dir.exists():
             product_id = f"{_slugify(name)}-{suffix}"
-            root_dir = self._user_dir / product_id
+            root_dir = self._products_dir / product_id
             suffix += 1
 
-        (root_dir / "sources").mkdir(parents=True, exist_ok=True)
-        (root_dir / "assets" / "pages").mkdir(parents=True, exist_ok=True)
-        (root_dir / "assets" / "figures").mkdir(parents=True, exist_ok=True)
-        (root_dir / "structured").mkdir(parents=True, exist_ok=True)
-        (root_dir / "index").mkdir(parents=True, exist_ok=True)
-        (root_dir / "graph").mkdir(parents=True, exist_ok=True)
-        (root_dir / "jobs").mkdir(parents=True, exist_ok=True)
-        (root_dir / "conversations").mkdir(parents=True, exist_ok=True)
+        _ensure_product_dirs(root_dir)
 
         manifest = {
             "id": product_id,
@@ -148,6 +143,7 @@ class ProductRegistry:
             "logo_path": None,
             "domain": "generic",
             "status": "draft",
+            "categories": categories or [],
             "sources": [],
             "quick_actions": _default_quick_actions("generic"),
         }
@@ -155,11 +151,6 @@ class ProductRegistry:
         manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
         self._cache.pop(product_id, None)
         return self.require_product(product_id)
-
-    def _storage_root(self, runtime: ProductRuntime) -> Path:
-        if runtime.seeded:
-            return self._user_dir / runtime.id
-        return runtime.root_dir
 
     def _write_manifest(self, runtime: ProductRuntime, manifest: dict) -> None:
         runtime.manifest_path.write_text(
@@ -169,7 +160,7 @@ class ProductRegistry:
         self._cache.pop(runtime.id, None)
 
     def _source_dir(self, runtime: ProductRuntime, source_id: str) -> Path:
-        return self._storage_root(runtime) / "sources" / source_id
+        return runtime.root_dir / "sources" / source_id
 
     def _clear_source_dir(self, runtime: ProductRuntime, source_id: str) -> None:
         source_dir = self._source_dir(runtime, source_id)
@@ -289,10 +280,10 @@ class ProductRegistry:
 
     def save_logo(self, product_id: str, filename: str, content: bytes) -> ProductRuntime:
         runtime = self.require_product(product_id)
-        assets_dir = self._storage_root(runtime) / "assets"
-        assets_dir.mkdir(parents=True, exist_ok=True)
+        files_dir = runtime.root_dir / "files"
+        files_dir.mkdir(parents=True, exist_ok=True)
         extension = Path(filename).suffix.lower() or ".png"
-        target_path = assets_dir / f"logo{extension}"
+        target_path = files_dir / f"logo{extension}"
         target_path.write_bytes(content)
 
         manifest = self._load_manifest(runtime.manifest_path)
@@ -341,50 +332,25 @@ class ProductRegistry:
         )
         self._cache.pop(product_id, None)
 
-    def _find_manifest_path(self, product_id: str) -> Path | None:
-        seeded = self._seeded_dir / product_id / "pack.yaml"
-        if seeded.exists():
-            return seeded
-        user = self._user_dir / product_id / "pack.yaml"
-        if user.exists():
-            return user
-        return None
-
     def _build_runtime(self, manifest_path: Path) -> ProductRuntime:
         manifest_data = self._load_manifest(manifest_path)
-        seeded = self._seeded_dir in manifest_path.parents
-        root_dir = manifest_path.parent if not seeded else PROJECT_ROOT
+        root_dir = manifest_path.parent
         manifest = self._parse_manifest(manifest_data)
 
-        if seeded and manifest.id == "vulcan-omnipro-220":
-            structured_dir = BACKEND_DIR / "app" / "knowledge" / "data"
-            index_dir = structured_dir
-            pages_dir = KNOWLEDGE_DIR / "images"
-            figures_dir = KNOWLEDGE_DIR / "figures"
-            graph_dir = DATA_DIR / "products" / manifest.id / "graph"
-            jobs_dir = DATA_DIR / "products" / manifest.id / "jobs"
-            conversations_dir = DATA_DIR / "products" / manifest.id / "conversations"
-        else:
-            structured_dir = manifest_path.parent / "structured"
-            index_dir = manifest_path.parent / "index"
-            pages_dir = manifest_path.parent / "assets" / "pages"
-            figures_dir = manifest_path.parent / "assets" / "figures"
-            graph_dir = manifest_path.parent / "graph"
-            jobs_dir = manifest_path.parent / "jobs"
-            conversations_dir = manifest_path.parent / "conversations"
+        # Ensure all subdirs exist (idempotent, works on any OS)
+        _ensure_product_dirs(root_dir)
 
         return ProductRuntime(
             manifest=manifest,
             root_dir=root_dir,
             manifest_path=manifest_path,
-            structured_dir=structured_dir,
-            index_dir=index_dir,
-            graph_dir=graph_dir,
-            pages_dir=pages_dir,
-            figures_dir=figures_dir,
-            jobs_dir=jobs_dir,
-            conversations_dir=conversations_dir,
-            seeded=seeded,
+            structured_dir=root_dir / "structured",
+            index_dir=root_dir / "index",
+            graph_dir=root_dir / "graph",
+            pages_dir=root_dir / "assets" / "pages",
+            figures_dir=root_dir / "assets" / "figures",
+            jobs_dir=root_dir / "jobs",
+            conversations_dir=root_dir / "conversations",
         )
 
     def _load_manifest(self, manifest_path: Path) -> dict:
@@ -417,6 +383,7 @@ class ProductRegistry:
             domain=domain,
             status=str(data.get("status", "ready")),
             primary_source_id=primary_source_id,
+            categories=[str(c) for c in data.get("categories", [])],
             processes=[str(value) for value in data.get("processes", [])],
             voltages=[str(value) for value in data.get("voltages", [])],
             quick_actions=data.get("quick_actions") or _default_quick_actions(domain),
@@ -449,4 +416,3 @@ def use_product_runtime(runtime: ProductRuntime) -> Iterator[None]:
         yield
     finally:
         _active_runtime.reset(token)
-

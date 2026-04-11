@@ -33,6 +33,7 @@ export interface ProductSummary {
   item_number?: string | null;
   logo_url?: string | null;
   domain: string;
+  categories: string[];
   status: string;
   seeded: boolean;
   primary_source_id?: string | null;
@@ -142,11 +143,18 @@ export async function fetchProduct(productId: string): Promise<ProductSummary> {
   return res.json();
 }
 
-export async function createProduct(name: string, description: string): Promise<ProductSummary> {
+export async function deleteProduct(productId: string): Promise<void> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}`), { method: "DELETE" });
+  if (!res.ok) {
+    throw new Error(`Delete product failed: ${res.status} ${res.statusText}`);
+  }
+}
+
+export async function createProduct(name: string, description: string, categories: string[] = []): Promise<ProductSummary> {
   const res = await fetch(buildBackendUrl("/api/products"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, description }),
+    body: JSON.stringify({ name, description, categories }),
   });
   if (!res.ok) {
     throw new Error(`Create product failed: ${res.status} ${res.statusText}`);

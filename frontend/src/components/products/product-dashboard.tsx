@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, FileText, Loader2, Plus } from "lucide-react";
+import { ChevronRight, FileText, Loader2, Pencil, Plus } from "lucide-react";
 import { BACKEND_URL, fetchProducts, ProductSummary } from "@/lib/api";
 import { CreateProductDialog } from "@/components/products/create-product-dialog";
 
@@ -19,6 +19,7 @@ export function ProductDashboard({
   initialDefaultProductId = "",
 }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [editProduct, setEditProduct] = useState<ProductSummary | null>(null);
   const [items, setItems] = useState(initialProducts);
   const [defaultProductId, setDefaultProductId] = useState(initialDefaultProductId);
   const [isLoading, setIsLoading] = useState(initialProducts.length === 0);
@@ -70,11 +71,12 @@ export function ProductDashboard({
               ProductManualQnA
             </p>
             <h1 className="mt-2 text-3xl font-semibold text-gray-900 dark:text-neutral-100">
-              Choose a product workspace
+              Your Product Workspaces
             </h1>
-            <p className="mt-3 max-w-2xl text-sm text-gray-500 dark:text-neutral-400">
-              Pick an existing product profile or create a new one. Each product keeps its
-              own manuals, ingestion state, conversations, sources, and artifacts.
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-500 dark:text-neutral-400">
+              Upload any product manual and get an AI assistant that answers questions with
+              exact data, diagrams, and page references. Each workspace keeps its own documents,
+              knowledge base, and conversations.
             </p>
           </div>
           <button
@@ -127,54 +129,79 @@ export function ProductDashboard({
                     {product.description || "Manual assistant workspace"}
                   </p>
                 </div>
-                <ChevronRight className="h-5 w-5 text-gray-300 transition-colors group-hover:text-orange-500 dark:text-neutral-600 dark:group-hover:text-orange-400" />
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditProduct(product); }}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-300 opacity-0 transition-all hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100 dark:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+                    title="Edit product"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <ChevronRight className="h-5 w-5 text-gray-300 transition-colors group-hover:text-orange-500 dark:text-neutral-600 dark:group-hover:text-orange-400" />
+                </div>
               </div>
 
-              <div className="mt-5 flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-700 dark:bg-neutral-800 dark:text-neutral-200">
-                  {product.document_count}/{product.max_documents} manuals
-                </span>
-                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-700 dark:bg-neutral-800 dark:text-neutral-200">
-                  {product.domain}
+              {(product.categories?.length ? product.categories : [product.domain]).length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                  {(product.categories?.length ? product.categories : [product.domain]).slice(0, 3).map((cat) => (
+                    <span
+                      key={cat}
+                      className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600 dark:bg-neutral-800 dark:text-neutral-300"
+                    >
+                      {cat}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-4 flex items-center justify-between text-xs">
+                <span className="inline-flex items-center gap-1 text-gray-400 dark:text-neutral-500">
+                  <FileText className="h-3.5 w-3.5" />
+                  {product.document_count} {product.document_count === 1 ? "manual" : "manuals"}
                 </span>
                 <span
-                  className={`rounded-full px-2.5 py-1 ${
+                  className={`inline-flex items-center gap-1.5 font-medium ${
                     product.ingestion.status === "ready"
-                      ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-200"
+                      ? "text-green-600 dark:text-green-400"
                       : product.ingestion.status === "processing"
-                        ? "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-200"
-                        : "bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-200"
+                        ? "text-orange-500 dark:text-orange-300"
+                        : "text-gray-400 dark:text-neutral-500"
                   }`}
                 >
-                  {product.ingestion.status}
+                  {product.ingestion.status === "processing" && (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  )}
+                  {product.ingestion.status === "ready" ? "\u2022 Ready" : product.ingestion.status === "processing" ? "Ingesting..." : "\u2022 Draft"}
                 </span>
-              </div>
-
-              <div className="mt-5 flex items-center justify-between text-xs text-gray-400 dark:text-neutral-500">
-                <span className="inline-flex items-center gap-1">
-                  <FileText className="h-3.5 w-3.5" />
-                  {product.sources.length} attached docs
-                </span>
-                {product.ingestion.status === "processing" && (
-                  <span className="inline-flex items-center gap-1 text-orange-500 dark:text-orange-300">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Ingesting
-                  </span>
-                )}
               </div>
             </Link>
           ))}
         </div>
       </div>
 
-      <CreateProductDialog
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={(product) => {
-          setItems((prev) => [...prev, product]);
-          setCreateOpen(false);
-        }}
-      />
+      {(createOpen || editProduct) && (
+        <CreateProductDialog
+          key={editProduct?.id ?? "create"}
+          open
+          editMode={!!editProduct}
+          initialData={editProduct ?? undefined}
+          onClose={() => { setCreateOpen(false); setEditProduct(null); }}
+          onCreated={(product) => {
+            if (editProduct) {
+              setItems((prev) => prev.map((p) => p.id === product.id ? product : p));
+            } else {
+              setItems((prev) => [...prev, product]);
+            }
+            setCreateOpen(false);
+            setEditProduct(null);
+          }}
+          onDeleted={(deletedId) => {
+            setItems((prev) => prev.filter((p) => p.id !== deletedId));
+            setEditProduct(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -8,8 +8,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 BACKEND_DIR = PROJECT_ROOT / "backend"
 DATA_DIR = PROJECT_ROOT / "data"
-KNOWLEDGE_DIR = PROJECT_ROOT / "knowledge"
-FILES_DIR = PROJECT_ROOT / "files"
 PRODUCTS_DIR = DATA_DIR / "products"
 
 
@@ -30,8 +28,6 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
 
     # Paths
-    knowledge_dir: str = str(KNOWLEDGE_DIR)
-    files_dir: str = str(FILES_DIR)
     products_dir: str = str(PRODUCTS_DIR)
     default_product_id: str = "vulcan-omnipro-220"
     max_documents_per_product: int = 10

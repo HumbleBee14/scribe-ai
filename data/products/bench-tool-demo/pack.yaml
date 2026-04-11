@@ -1,0 +1,17 @@
+id: bench-tool-demo
+product_name: Bench Tool Demo
+manufacturer: Demo Workshop
+description: Example generic product profile used to verify product switching and
+  local-first ingestion flows.
+domain: generic
+status: ready
+quick_actions:
+- label: Summarize manual
+  message: Give me a concise overview of this product manual and what topics it covers.
+- label: Find setup steps
+  message: Walk me through the main setup steps from this manual.
+- label: Show a diagram
+  message: Show me the most relevant diagram or visual reference from this manual.
+- label: Search a feature
+  message: Help me find the section in this manual that explains a key feature.
+sources: []

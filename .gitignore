@@ -1,15 +1,13 @@
 .env
 .env.local
 
-# Local runtime state
-data/local.db
-data/local.db-*
+# SQLite WAL/SHM files (runtime only, not the db itself)
+data/local.db-wal
+data/local.db-shm
 
-# Generated knowledge artifacts during local ingest
-knowledge/images/**
-knowledge/figures/**
-!knowledge/images/.gitkeep
-!knowledge/figures/.gitkeep
+# User-created products (evaluator only gets seeded products via git)
+data/products/*/jobs/
+data/products/*/conversations/
 
 # Python / Node local artifacts
 backend/.venv/

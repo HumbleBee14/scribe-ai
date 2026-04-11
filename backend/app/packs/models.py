@@ -27,6 +27,7 @@ class ProductManifest:
     domain: str = "generic"
     status: str = "ready"
     primary_source_id: str | None = None
+    categories: list[str] = field(default_factory=list)
     processes: list[str] = field(default_factory=list)
     voltages: list[str] = field(default_factory=list)
     quick_actions: list[dict[str, str]] = field(default_factory=list)
@@ -57,7 +58,6 @@ class ProductRuntime:
     figures_dir: Path
     jobs_dir: Path
     conversations_dir: Path
-    seeded: bool = False
 
     @property
     def id(self) -> str:

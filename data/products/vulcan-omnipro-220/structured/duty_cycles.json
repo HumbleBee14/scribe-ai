@@ -1,0 +1,116 @@
+{
+  "mig": {
+    "120v": {
+      "rated": {
+        "duty_cycle_percent": 40,
+        "amperage": 100,
+        "weld_minutes": 4,
+        "rest_minutes": 6,
+        "period_minutes": 10
+      },
+      "continuous": {
+        "duty_cycle_percent": 100,
+        "amperage": 75
+      }
+    },
+    "240v": {
+      "rated": {
+        "duty_cycle_percent": 25,
+        "amperage": 200,
+        "weld_minutes": 2.5,
+        "rest_minutes": 7.5,
+        "period_minutes": 10
+      },
+      "continuous": {
+        "duty_cycle_percent": 100,
+        "amperage": 115
+      }
+    }
+  },
+  "flux_cored": {
+    "120v": {
+      "rated": {
+        "duty_cycle_percent": 40,
+        "amperage": 100,
+        "weld_minutes": 4,
+        "rest_minutes": 6,
+        "period_minutes": 10
+      },
+      "continuous": {
+        "duty_cycle_percent": 100,
+        "amperage": 75
+      }
+    },
+    "240v": {
+      "rated": {
+        "duty_cycle_percent": 25,
+        "amperage": 200,
+        "weld_minutes": 2.5,
+        "rest_minutes": 7.5,
+        "period_minutes": 10
+      },
+      "continuous": {
+        "duty_cycle_percent": 100,
+        "amperage": 115
+      }
+    }
+  },
+  "tig": {
+    "120v": {
+      "rated": {
+        "duty_cycle_percent": 40,
+        "amperage": 125,
+        "weld_minutes": 4,
+        "rest_minutes": 6,
+        "period_minutes": 10
+      },
+      "continuous": {
+        "duty_cycle_percent": 100,
+        "amperage": 90
+      }
+    },
+    "240v": {
+      "rated": {
+        "duty_cycle_percent": 30,
+        "amperage": 175,
+        "weld_minutes": 3,
+        "rest_minutes": 7,
+        "period_minutes": 10
+      },
+      "continuous": {
+        "duty_cycle_percent": 100,
+        "amperage": 105
+      }
+    }
+  },
+  "stick": {
+    "120v": {
+      "rated": {
+        "duty_cycle_percent": 40,
+        "amperage": 80,
+        "weld_minutes": 4,
+        "rest_minutes": 6,
+        "period_minutes": 10
+      },
+      "continuous": {
+        "duty_cycle_percent": 100,
+        "amperage": 60
+      }
+    },
+    "240v": {
+      "rated": {
+        "duty_cycle_percent": 25,
+        "amperage": 175,
+        "weld_minutes": 2.5,
+        "rest_minutes": 7.5,
+        "period_minutes": 10
+      },
+      "continuous": {
+        "duty_cycle_percent": 100,
+        "amperage": 100
+      }
+    }
+  },
+  "_source": "Pages 7, 19, 29 of owner-manual.pdf",
+  "_note": "Duty cycle defines the number of minutes within a 10 minute period during which a given welder can produce a particular welding current without overheating."
+}

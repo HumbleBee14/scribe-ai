@@ -20,7 +20,6 @@ import { SourceViewer } from "@/components/evidence/source-viewer";
 import { HistorySidebar } from "@/components/layout/history-sidebar";
 import { MobileContextPanel } from "@/components/layout/mobile-context-panel";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
-import { ProductManualManager } from "@/components/products/product-manual-manager";
 import type { SelectedSourcePage } from "@/types/events";
 
 interface Props {
@@ -266,36 +265,18 @@ export function ProductWorkspace({ initialProductId }: Props) {
           <div className="flex min-h-0 flex-col">
             <div className="flex-1 overflow-y-auto">
               {messages.length === 0 ? (
-                <div className="flex min-h-full flex-col">
-                  <ProductManualManager
-                    product={activeProduct}
-                    onProductChange={(next) =>
-                      setProducts((prev) =>
-                        prev.map((product) => (product.id === next.id ? next : product))
-                      )
+                <div className="flex min-h-full">
+                  <WelcomeScreen
+                    productName={activeProduct.name}
+                    productDescription={
+                      activeProduct.description || "Choose a product and ask grounded questions."
                     }
+                    quickActions={activeProduct.quick_actions}
+                    onQuickAction={(msg) => handleSend(msg)}
                   />
-                  <div className="flex flex-1">
-                    <WelcomeScreen
-                      productName={activeProduct.name}
-                      productDescription={
-                        activeProduct.description || "Choose a product and ask grounded questions."
-                      }
-                      quickActions={activeProduct.quick_actions}
-                      onQuickAction={(msg) => handleSend(msg)}
-                    />
-                  </div>
                 </div>
               ) : (
                 <div className="mx-auto max-w-6xl space-y-6 px-6 py-4">
-                  <ProductManualManager
-                    product={activeProduct}
-                    onProductChange={(next) =>
-                      setProducts((prev) =>
-                        prev.map((product) => (product.id === next.id ? next : product))
-                      )
-                    }
-                  />
                   {messages.map((msg) => (
                     <MessageBubble
                       key={msg.id}

@@ -4,6 +4,10 @@ item_number: "57812"
 manufacturer: Harbor Freight Tools
 description: Multiprocess welding system (MIG, Flux-Cored, TIG, Stick) with dual voltage input (120V/240V) and LCD synergic controls
 domain: welding
+categories:
+  - welding
+  - multiprocess
+  - industrial
 status: ready
 primary_source_id: owner-manual
 sources:
