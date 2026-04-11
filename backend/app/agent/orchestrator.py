@@ -25,16 +25,11 @@ logger = logging.getLogger(__name__)
 MAX_AGENT_TURNS = 10
 
 _TOOL_LABELS: dict[str, str] = {
-    "lookup_specifications": "Looking up specifications",
-    "lookup_duty_cycle": "Looking up duty cycle",
-    "lookup_polarity": "Checking polarity setup",
-    "lookup_troubleshooting": "Checking troubleshooting guidance",
-    "lookup_safety_warnings": "Reviewing safety warnings",
-    "clarify_question": "Preparing clarification",
-    "get_page_image": "Loading manual page",
-    "diagnose_weld": "Reviewing weld symptoms",
     "search_manual": "Searching manual",
-    "Read": "Reading from manual",
+    "get_page_text": "Reading page content",
+    "get_page_image": "Loading page image",
+    "clarify_question": "Asking for clarification",
+    "Read": "Reading file",
 }
 
 
@@ -73,7 +68,6 @@ class AgentOrchestrator:
     def __init__(self) -> None:
         self._mcp_server = create_knowledge_mcp_server()
         self._model = settings.llm_model
-        self._context_assembler = ContextAssembler()
 
     async def run(
         self,
@@ -110,28 +104,27 @@ class AgentOrchestrator:
             prompt: Any = self._build_multimodal_prompt(user_message, images)
         else:
             prompt = user_message
-        context_bundle = self._context_assembler.assemble(user_message, session, runtime)
+
+        system_prompt = build_system_prompt(
+            product_id=runtime.id,
+            user_message=user_message,
+        )
+        print(f"\n{'='*60}", flush=True)
+        print(f"[AGENT] System prompt ({len(system_prompt)} chars):", flush=True)
+        print(f"{'='*60}", flush=True)
+        print(system_prompt, flush=True)
+        print(f"{'='*60}\n", flush=True)
 
         options = ClaudeAgentOptions(
             model=self._model,
-            system_prompt=build_system_prompt(
-                session.context_summary(),
-                product_name=runtime.product_name,
-                product_description=runtime.manifest.description,
-                manual_path=str(runtime.manual_path) if runtime.manual_path else "",
-                domain=runtime.domain,
-                assembled_context=context_bundle.to_prompt_section(),
-            ),
+            system_prompt=system_prompt,
             mcp_servers={MCP_SERVER_NAME: self._mcp_server},
             max_turns=MAX_AGENT_TURNS,
             permission_mode="bypassPermissions",
             include_partial_messages=True,
             allowed_tools=[
-                *([ "Read" ] if runtime.manual_path else []),
-                *[
-                    f"mcp__{MCP_SERVER_NAME}__{tool_name}"
-                    for tool_name in runtime.allowed_tool_names
-                ],
+                "Read",  # Built-in: agent can read files including page images for vision
+                f"mcp__{MCP_SERVER_NAME}__*",  # All our custom tools
             ],
         )
 

@@ -8,6 +8,8 @@ Database handles: product metadata, sources, categories, ingestion status.
 """
 from __future__ import annotations
 
+import logging
+import re
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -15,6 +17,8 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import DATA_DIR
+
+logger = logging.getLogger(__name__)
 
 DB_PATH = DATA_DIR / "local.db"
 
@@ -525,19 +529,34 @@ def get_page_detailed_text(product_id: str, source_id: str, pages: list[int]) ->
 
 
 def search_pages_fts(product_id: str, query: str, limit: int = 10) -> list[dict[str, Any]]:
-    """Full-text search across all page content for a product."""
+    """Full-text search across all page content for a product.
+
+    Converts query to OR-separated tokens so pages matching ANY term are returned,
+    ranked by how many terms match (BM25 scoring).
+    """
     conn = _get_conn()
-    rows = conn.execute(
-        """SELECT pa.source_id, pa.page, pa.summary, pa.keywords,
-                  rank AS fts_rank
-           FROM page_fts
-           JOIN page_analysis pa ON page_fts.rowid = pa.rowid
-           WHERE page_fts MATCH ? AND pa.product_id = ?
-           ORDER BY rank
-           LIMIT ?""",
-        (query, product_id, limit),
-    ).fetchall()
-    return [dict(row) for row in rows]
+    # Sanitize and convert to OR-separated tokens
+    # Remove FTS5 special characters that break queries
+    clean = re.sub(r'["\'\(\)\*\+\-\:\;\!\?\.\,\[\]\{\}]', ' ', query)
+    tokens = [t.strip() for t in clean.split() if t.strip() and len(t.strip()) > 1]
+    if not tokens:
+        return []
+    fts_query = " OR ".join(tokens)
+    try:
+        rows = conn.execute(
+            """SELECT pa.source_id, pa.page, pa.summary, pa.keywords,
+                      rank AS fts_rank
+               FROM page_fts
+               JOIN page_analysis pa ON page_fts.rowid = pa.rowid
+               WHERE page_fts MATCH ? AND pa.product_id = ?
+               ORDER BY rank
+               LIMIT ?""",
+            (fts_query, product_id, limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    except Exception as exc:
+        logger.warning("FTS5 search failed: %s", exc)
+        return []
 
 
 def delete_page_analysis_for_source(product_id: str, source_id: str) -> None:
@@ -606,29 +625,49 @@ def upsert_page_embedding(product_id: str, source_id: str, page: int, embedding:
 def search_by_embedding(product_id: str, query_embedding: bytes, limit: int = 10) -> list[dict[str, Any]]:
     """Find most similar pages using native sqlite-vec vector search.
 
-    Returns pages ranked by similarity (closest first) with their
-    summary and detailed_text from page_analysis.
+    Two-step: vec search first (fast), then enrich with metadata.
     """
     conn = _get_conn()
     try:
-        rows = conn.execute(
-            """SELECT
-                 pe.product_id, pe.source_id, pe.page,
-                 pv.distance,
-                 pa.summary, pa.detailed_text, pa.keywords
-               FROM page_vec pv
-               JOIN page_embeddings pe ON pe.rowid = pv.rowid
-               JOIN page_analysis pa ON pa.product_id = pe.product_id
-                 AND pa.source_id = pe.source_id AND pa.page = pe.page
-               WHERE pv.embedding MATCH ?
-                 AND pe.product_id = ?
-               ORDER BY pv.distance
-               LIMIT ?""",
-            (query_embedding, product_id, limit),
+        # Step 1: Vector search (no JOINs - sqlite-vec works best alone)
+        vec_rows = conn.execute(
+            "SELECT rowid, distance FROM page_vec "
+            "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+            (query_embedding, limit * 3),  # fetch extra, filter by product after
         ).fetchall()
-        return [dict(row) for row in rows]
-    except Exception:
-        # Fallback if sqlite-vec not available
+
+        if not vec_rows:
+            return []
+
+        # Step 2: Enrich with metadata and filter by product_id
+        results = []
+        for vr in vec_rows:
+            pe = conn.execute(
+                "SELECT product_id, source_id, page FROM page_embeddings WHERE rowid = ?",
+                (vr["rowid"],),
+            ).fetchone()
+            if not pe or pe["product_id"] != product_id:
+                continue
+
+            pa = conn.execute(
+                "SELECT summary, keywords FROM page_analysis "
+                "WHERE product_id = ? AND source_id = ? AND page = ?",
+                (pe["product_id"], pe["source_id"], pe["page"]),
+            ).fetchone()
+
+            results.append({
+                "source_id": pe["source_id"],
+                "page": pe["page"],
+                "distance": vr["distance"],
+                "summary": pa["summary"] if pa else "",
+                "keywords": pa["keywords"] if pa else "",
+            })
+            if len(results) >= limit:
+                break
+
+        return results
+    except Exception as exc:
+        logger.warning("Vector search failed: %s", exc)
         return []
 
 

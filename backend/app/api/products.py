@@ -396,10 +396,13 @@ def get_page_asset(product_id: str, source_id: str, filename: str) -> FileRespon
     if not str(path).startswith(str(runtime.pages_dir.resolve())):
         raise HTTPException(status_code=400, detail="Invalid path")
     if not path.exists():
-        # Legacy fallback: pages directly in pages_dir without source subfolder
-        legacy_path = runtime.pages_dir / safe_name
-        if legacy_path.exists():
-            path = legacy_path
+        # Fallback: search all source subfolders for the file
+        for subdir in runtime.pages_dir.iterdir():
+            if subdir.is_dir():
+                candidate = subdir / safe_name
+                if candidate.exists():
+                    path = candidate
+                    break
     if not path.exists():
         raise HTTPException(status_code=404, detail="Page image not found")
     return FileResponse(path)

@@ -19,20 +19,31 @@ MCP_SERVER_NAME = "product-knowledge"
 
 
 def _mcp_result(data: Any) -> dict[str, Any]:
-    """Wrap tool output in MCP CallToolResult format."""
+    """Wrap tool output in MCP CallToolResult format.
+
+    SDK expects: {"content": [{"type": "text", "text": "..."}]}
+    """
     if isinstance(data, str):
         text = data
     elif isinstance(data, dict):
         text = json.dumps(data, indent=2, default=str)
     else:
         text = str(data)
-    return {"type": "text", "text": text}
+    return {"content": [{"type": "text", "text": text}]}
 
 
 def _make_tool(name: str, description: str, schema: dict):
-    """Create an MCP tool function bound to a specific tool name."""
-    def handler(**kwargs: Any) -> dict[str, Any]:
-        return _mcp_result(execute_tool(name, kwargs))
+    """Create an async MCP tool function bound to a specific tool name."""
+    async def handler(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        # Debug: log what the SDK actually passes
+        print(f"[MCP-HANDLER] {name} called with args={args} kwargs={kwargs}", flush=True)
+        if args and isinstance(args[0], dict):
+            tool_args = args[0]
+        elif kwargs:
+            tool_args = kwargs
+        else:
+            tool_args = {}
+        return _mcp_result(execute_tool(name, tool_args))
 
     return tool(name=name, description=description, input_schema=schema)(handler)
 

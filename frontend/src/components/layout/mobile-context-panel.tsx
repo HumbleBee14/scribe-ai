@@ -1,15 +1,13 @@
 "use client";
 
 import { DialogShell } from "@/components/ui/dialog-shell";
-import { SessionSidebar } from "@/components/evidence/session-sidebar";
 import { SourceViewer } from "@/components/evidence/source-viewer";
-import type { ArtifactEvent, SelectedSourcePage, SessionState } from "@/types/events";
+import type { ArtifactEvent, SelectedSourcePage } from "@/types/events";
 
 interface MobileContextPanelProps {
   open: boolean;
   onClose: () => void;
   productId: string;
-  session: SessionState | null;
   selectedSource: SelectedSourcePage | null;
   artifacts: ArtifactEvent["data"][];
 }
@@ -18,7 +16,6 @@ export function MobileContextPanel({
   open,
   onClose,
   productId,
-  session,
   selectedSource,
   artifacts,
 }: MobileContextPanelProps) {
@@ -32,7 +29,6 @@ export function MobileContextPanel({
       sizeClassName="max-w-2xl"
       contentClassName="p-4 space-y-6 bg-gray-50 dark:bg-neutral-950"
     >
-      <SessionSidebar session={session} />
       <SourceViewer
         productId={productId}
         selectedSource={selectedSource}

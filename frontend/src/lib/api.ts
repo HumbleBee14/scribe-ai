@@ -11,7 +11,7 @@ export function buildBackendUrl(path: string): string {
 export function getManualPageImageUrl(
   productId: string,
   page: number,
-  sourceId = "default"
+  sourceId = "owner-manual"
 ): string {
   return buildBackendUrl(
     `/api/products/${productId}/assets/pages/${sourceId}/page_${String(page).padStart(2, "0")}.png`

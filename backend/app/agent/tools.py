@@ -24,16 +24,17 @@ TOOL_DEFINITIONS: list[dict] = [
     {
         "name": "search_manual",
         "description": (
-            "Search across all product manual pages using keywords. "
+            "Search across all product manual pages using keywords and semantic similarity. "
             "Returns page summaries ranked by relevance. "
-            "Use this to find which pages contain information about a topic."
+            "Use this FIRST to find which pages contain information about a topic. "
+            "Example queries: 'specifications', 'setup steps', 'troubleshooting', 'safety warnings'."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Search query - use specific terms from the manual",
+                    "description": "Search query. Use specific terms the manual would contain.",
                 },
             },
             "required": ["query"],
@@ -43,20 +44,23 @@ TOOL_DEFINITIONS: list[dict] = [
         "name": "get_page_text",
         "description": (
             "Get the full detailed text content of specific manual pages. "
-            "Use this after search_manual identifies relevant pages, "
-            "or when you need the complete text from specific page numbers."
+            "Use after search_manual identifies relevant pages, or when the document map "
+            "in the system prompt tells you which pages cover a topic. "
+            "You can request a single page or multiple pages at once. "
+            "Examples: get_page_text('owner-manual', [7]) for specs page, "
+            "get_page_text('owner-manual', [10, 11, 12]) for MIG setup steps across pages."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "source_id": {
                     "type": "string",
-                    "description": "Document source ID (e.g. 'owner-manual')",
+                    "description": "Document source ID from the document map (e.g. 'owner-manual', 'quick-start-guide')",
                 },
                 "pages": {
                     "type": "array",
                     "items": {"type": "integer"},
-                    "description": "List of page numbers to retrieve",
+                    "description": "Page numbers to retrieve. Single page: [7]. Multiple: [10, 11, 12].",
                 },
             },
             "required": ["source_id", "pages"],
@@ -65,9 +69,11 @@ TOOL_DEFINITIONS: list[dict] = [
     {
         "name": "get_page_image",
         "description": (
-            "Get a rendered page image to show diagrams, tables, or visual content. "
-            "Use when the user asks about a diagram, schematic, or visual reference, "
-            "or when you need to show the actual manual page."
+            "Get a manual page image. Returns a file_path and a display URL. "
+            "The image is shown to the user inline in the chat. "
+            "If YOU need to visually analyze the page (circuit diagrams, schematics, wiring layouts, "
+            "parts diagrams), use the Read tool on the returned file_path to see the image yourself. "
+            "Example: get_page_image('owner-manual', 7) to show the specifications page."
         ),
         "input_schema": {
             "type": "object",
@@ -78,7 +84,7 @@ TOOL_DEFINITIONS: list[dict] = [
                 },
                 "page": {
                     "type": "integer",
-                    "description": "Page number to show",
+                    "description": "Page number to display to the user",
                 },
             },
             "required": ["source_id", "page"],
@@ -87,26 +93,80 @@ TOOL_DEFINITIONS: list[dict] = [
     {
         "name": "clarify_question",
         "description": (
-            "Ask the user a clarifying question when their query is ambiguous. "
-            "Use when you need more information before you can give an accurate answer."
+            "Ask the user a clarifying question when their query is ambiguous or missing details. "
+            "Example: if the user's question could apply to multiple sections or topics, "
+            "ask them to specify which one they mean."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "question": {
                     "type": "string",
-                    "description": "The clarifying question to ask",
+                    "description": "The clarifying question to ask the user",
                 },
                 "options": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Optional list of choices for the user",
+                    "description": "Optional choices to make it easy for the user to answer",
                 },
             },
             "required": ["question"],
         },
     },
 ]
+
+
+def _hybrid_search(product_id: str, query: str, limit: int = 8) -> list[dict]:
+    """Combine FTS5 keyword search + embedding vector search.
+
+    Scoring: 0.5 * embedding_similarity + 0.5 * fts5_presence
+    Deduplicates by (source_id, page).
+    """
+    seen: dict[tuple[str, int], dict] = {}
+
+    # FTS5 keyword search
+    fts_results = db.search_pages_fts(product_id, query, limit=limit * 2)
+    for r in fts_results:
+        key = (r["source_id"], r["page"])
+        if key not in seen:
+            seen[key] = {
+                "source_id": r["source_id"],
+                "page": r["page"],
+                "summary": r["summary"],
+                "fts_hit": True,
+                "vec_distance": None,
+                "score": 0.5,  # base score for FTS hit
+            }
+
+    # Embedding vector search
+    try:
+        from app.ingest.build_embeddings import embed_text
+        query_blob = embed_text(query)
+        if query_blob:
+            vec_results = db.search_by_embedding(product_id, query_blob, limit=limit * 2)
+            for r in vec_results:
+                key = (r["source_id"], r["page"])
+                # Lower distance = more similar. Normalize to 0-1 score.
+                distance = r.get("distance", 10.0)
+                vec_score = max(0, 1.0 - distance / 20.0)  # rough normalization
+                if key in seen:
+                    seen[key]["vec_distance"] = distance
+                    seen[key]["score"] += vec_score * 0.5
+                else:
+                    seen[key] = {
+                        "source_id": r["source_id"],
+                        "page": r["page"],
+                        "summary": r.get("summary", ""),
+                        "fts_hit": False,
+                        "vec_distance": distance,
+                        "score": vec_score * 0.5,
+                    }
+    except Exception as exc:
+        logger.warning("Embedding search failed (non-fatal): %s", exc)
+
+    # Sort by combined score, return top results
+    ranked = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
+    return ranked[:limit]
 
 
 def _log_result(name: str, result: dict) -> dict:
@@ -139,7 +199,7 @@ def execute_tool(name: str, params: dict) -> dict:
 
     if name == "search_manual":
         query = params.get("query", "")
-        results = db.search_pages_fts(product_id, query, limit=8)
+        results = _hybrid_search(product_id, query, limit=8)
         if not results:
             return _log_result(name, {"results": [], "message": "No matching pages found."})
         return _log_result(name, {
@@ -148,7 +208,7 @@ def execute_tool(name: str, params: dict) -> dict:
                     "source_id": r["source_id"],
                     "page": r["page"],
                     "summary": r["summary"],
-                    "keywords": r["keywords"],
+                    "score": round(r.get("score", 0), 3),
                 }
                 for r in results
             ]
@@ -174,10 +234,15 @@ def execute_tool(name: str, params: dict) -> dict:
     if name == "get_page_image":
         source_id = params.get("source_id", "")
         page = params.get("page", 1)
+        # Return file path so agent can Read it for vision analysis,
+        # plus URL for frontend display
+        image_path = runtime.pages_dir / source_id / f"page_{page:02d}.png"
         return _log_result(name, {
             "page": page,
             "source_id": source_id,
+            "file_path": str(image_path),
             "url": f"/api/products/{product_id}/assets/pages/{source_id}/page_{page:02d}.png",
+            "note": "Use the Read tool on file_path if you need to visually analyze this page (diagrams, schematics, circuits). The image will also be shown to the user in the chat.",
         })
 
     if name == "clarify_question":

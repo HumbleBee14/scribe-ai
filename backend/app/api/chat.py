@@ -50,18 +50,12 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
     orchestrator = _get_orchestrator()
     runtime = get_product_registry().require_product(request.product_id)
 
-    # Get or create session
+    # Get or create session (for Agent SDK multi-turn resume)
     session = session_manager.get_or_create(
         request.session_id,
         product_id=runtime.id,
         product_name=runtime.product_name,
     )
-
-    # Update session context from user message
-    session_manager.update_from_message(session, request.message)
-
-    # Yield session info
-    yield _sse_event("session_update", session.to_dict())
 
     # Convert typed images to dicts for orchestrator
     images_raw: list[dict[str, str]] | None = None

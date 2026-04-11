@@ -43,26 +43,7 @@ def _ensure_product_dirs(root: Path) -> None:
         (root / subdir).mkdir(parents=True, exist_ok=True)
 
 
-def _default_quick_actions(domain: str) -> list[dict[str, str]]:
-    if domain == "welding":
-        return [
-            {
-                "label": "Set up MIG",
-                "message": "I want to set up MIG welding. Walk me through it step by step.",
-            },
-            {
-                "label": "Set up TIG",
-                "message": "I want to set up TIG welding. What do I need to do?",
-            },
-            {
-                "label": "Troubleshoot",
-                "message": "I'm having a problem with my welder. Can you help me troubleshoot?",
-            },
-            {
-                "label": "View specs",
-                "message": "What are the specifications for all welding processes on this machine?",
-            },
-        ]
+def _default_quick_actions(domain: str = "generic") -> list[dict[str, str]]:
     return [
         {
             "label": "Summarize manual",
@@ -347,7 +328,7 @@ class ProductRegistry:
             owner_manual = next((source for source in sources if source.type == "owner_manual"), None)
             primary_source_id = owner_manual.id if owner_manual else sources[0].id
 
-        domain = str(data.get("domain") or ("welding" if data.get("processes") else "generic"))
+        domain = str(data.get("domain", "generic"))
         return ProductManifest(
             id=str(data["id"]),
             product_name=str(data.get("product_name") or data["id"]),

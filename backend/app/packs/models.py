@@ -95,22 +95,11 @@ class ProductRuntime:
 
     @property
     def allowed_tool_names(self) -> list[str]:
-        if self.domain == "welding":
-            return [
-                "lookup_specifications",
-                "lookup_duty_cycle",
-                "lookup_polarity",
-                "lookup_troubleshooting",
-                "lookup_safety_warnings",
-                "clarify_question",
-                "get_page_image",
-                "diagnose_weld",
-                "search_manual",
-            ]
         return [
-            "clarify_question",
-            "get_page_image",
             "search_manual",
+            "get_page_text",
+            "get_page_image",
+            "clarify_question",
         ]
 
     def page_image_path(self, page: int, source_id: str | None = None) -> Path:

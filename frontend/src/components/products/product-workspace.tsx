@@ -15,7 +15,6 @@ import { extractArtifactsFromMessages } from "@/lib/artifacts";
 import { ChatInput } from "@/components/chat/chat-input";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { WelcomeScreen } from "@/components/chat/welcome-screen";
-import { SessionSidebar } from "@/components/evidence/session-sidebar";
 import { SourceViewer } from "@/components/evidence/source-viewer";
 import { HistorySidebar } from "@/components/layout/history-sidebar";
 import { MobileContextPanel } from "@/components/layout/mobile-context-panel";
@@ -304,7 +303,6 @@ export function ProductWorkspace({ initialProductId }: Props) {
 
           <aside className="hidden border-l border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900 xl:flex xl:flex-col">
             <div className="flex-1 space-y-6 overflow-y-auto p-4">
-              <SessionSidebar session={session} />
               <SourceViewer
                 productId={activeProduct.id}
                 selectedSource={selectedSource}
