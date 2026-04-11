@@ -136,30 +136,39 @@ multimodal-prox-challenge/
   backend/
     app/
       agent/         # Orchestrator, tools, MCP wrappers, system prompt
-      api/           # FastAPI routes (chat streaming, session)
-      knowledge/     # Evidence model and structured store
-      retrieval/     # BM25 search, query profiles, compression
-      session/       # Session manager (process/voltage/material tracking)
+      api/           # FastAPI routes (chat, products, assets)
+      core/          # Config, database, bootstrap, seed
+      context/       # Context assembler and routing
+      ingest/        # Background ingestion pipeline
+      knowledge/     # Structured store
+      packs/         # Product registry and manifest models
+      retrieval/     # BM25 search, query profiles
+      session/       # Session manager
       validation/    # Deterministic answer validation
-    scripts/         # Page rendering, chunk extraction, eval runner
-    tests/           # 104 tests
+    scripts/         # Page rendering, chunk extraction, seed, eval
+    tests/
   frontend/
     src/
       components/
         artifacts/   # Mermaid, SVG, HTML renderers
         chat/        # Message bubble, input, welcome screen
         evidence/    # Session sidebar, source viewer
-      lib/           # SSE client, useChat hook
-      types/         # Typed SSE event contracts
+        products/    # Dashboard, workspace, create/edit dialog
+      lib/           # SSE client, useChat hook, product API
+      types/         # Typed event contracts
   data/
-    document-packs/  # Product manifests, eval questions
-  knowledge/
-    images/          # 48 page PNGs at 200 DPI
-    figures/         # Cropped diagrams
-  files/
-    owner-manual.pdf
-    quick-start-guide.pdf
-    selection-chart.pdf
+    products/        # All product data lives here
+      vulcan-omnipro-220/
+        pack.yaml          # Product manifest
+        files/             # Source PDFs + logo
+        assets/pages/      # Rendered page PNGs
+        assets/figures/    # Cropped diagrams
+        structured/        # Extracted JSON (specs, duty cycles, etc.)
+        index/             # Chunks, search indexes
+        graph/             # Knowledge map artifacts
+        jobs/              # Ingestion status
+        conversations/     # Chat state
+    local.db         # SQLite database (pre-seeded, committed to git)
 ```
 
 ## Testing
@@ -183,11 +192,11 @@ cd backend && uv run python scripts/run_eval.py
 
 The architecture is designed as a reusable document-intelligence platform:
 
-1. Create a document pack: `data/document-packs/<product>/pack.yaml`
-2. Run page rendering: `uv run python scripts/render_pages.py`
-3. Extract structured data (Claude batch API or manual verification)
-4. Run chunk extraction: `uv run python scripts/extract_chunks.py`
-5. The agent serves the new product with the same tools and UI
+1. Create a product via the dashboard UI or API (`POST /api/products`)
+2. Upload PDF manuals (files stored in `data/products/<id>/files/`)
+3. Processing runs automatically (page rendering, chunk extraction, indexing)
+4. The agent serves the new product with the same tools and UI
+5. Each product is fully isolated: its own files, indexes, conversations, and database records
 
 ## Tech Stack
 

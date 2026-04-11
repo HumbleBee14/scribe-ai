@@ -7,8 +7,9 @@ from pathlib import Path
 import fitz  # PyMuPDF
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-FILES_DIR = PROJECT_ROOT / "files"
-IMAGES_DIR = PROJECT_ROOT / "knowledge" / "images"
+VULCAN_DIR = PROJECT_ROOT / "data" / "products" / "vulcan-omnipro-220"
+FILES_DIR = VULCAN_DIR / "files"
+IMAGES_DIR = VULCAN_DIR / "assets" / "pages"
 
 
 def render_pages(pdf_path: Path, output_dir: Path, dpi: int = 200) -> list[Path]:

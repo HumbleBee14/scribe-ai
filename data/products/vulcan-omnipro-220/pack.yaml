@@ -1,49 +1,16 @@
 id: vulcan-omnipro-220
 product_name: Vulcan OmniPro 220
-item_number: "57812"
-manufacturer: Harbor Freight Tools
-description: Multiprocess welding system (MIG, Flux-Cored, TIG, Stick) with dual voltage input (120V/240V) and LCD synergic controls
-domain: welding
-categories:
-  - welding
-  - multiprocess
-  - industrial
+description: Multiprocess welding system (MIG, Flux-Cored, TIG, Stick) with dual voltage
+  input (120V/240V) and LCD synergic controls
+domain: generic
 status: ready
-primary_source_id: owner-manual
-sources:
-  - id: owner-manual
-    path: files/owner-manual.pdf
-    type: owner_manual
-    pages: 48
-    label: Owner Manual
-  - id: quick-start-guide
-    path: files/quick-start-guide.pdf
-    type: quick_start
-    pages: 2
-    label: Quick Start Guide
-  - id: selection-chart
-    path: files/selection-chart.pdf
-    type: selection_chart
-    pages: 1
-    label: Selection Chart
-processes:
-  - mig
-  - flux_cored
-  - tig
-  - stick
-voltages:
-  - 120v
-  - 240v
+sources: []
 quick_actions:
-  - label: Set up MIG
-    message: I want to set up MIG welding. Walk me through it step by step.
-  - label: Set up TIG
-    message: I want to set up TIG welding. What do I need to do?
-  - label: Troubleshoot
-    message: I'm having a problem with my welder. Can you help me troubleshoot?
-  - label: View specs
-    message: What are the specifications for all welding processes on this machine?
-knowledge_artifacts:
-  structured_data_method: manual_verified_transcription
-  structured_data_note: For the Vulcan manual, structured JSON was transcribed and verified manually from the source PDF to maximize exactness for the challenge.
-  page_images_script: backend/scripts/render_pages.py
+- label: Summarize manual
+  message: Give me a concise overview of this product manual and what topics it covers.
+- label: Find setup steps
+  message: Walk me through the main setup steps from this manual.
+- label: Show a diagram
+  message: Show me the most relevant diagram or visual reference from this manual.
+- label: Search a feature
+  message: Help me find the section in this manual that explains a key feature.

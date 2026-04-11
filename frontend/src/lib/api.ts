@@ -150,6 +150,18 @@ export async function deleteProduct(productId: string): Promise<void> {
   }
 }
 
+export async function updateProduct(productId: string, updates: { description?: string; categories?: string[] }): Promise<ProductSummary> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    throw new Error(`Update product failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export async function createProduct(name: string, description: string, categories: string[] = []): Promise<ProductSummary> {
   const res = await fetch(buildBackendUrl("/api/products"), {
     method: "POST",

@@ -12,8 +12,9 @@ from pathlib import Path
 import fitz
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-FILES_DIR = PROJECT_ROOT / "files"
-DATA_DIR = PROJECT_ROOT / "backend" / "app" / "knowledge" / "data"
+VULCAN_DIR = PROJECT_ROOT / "data" / "products" / "vulcan-omnipro-220"
+FILES_DIR = VULCAN_DIR / "files"
+DATA_DIR = VULCAN_DIR / "index"
 
 # Manual section structure (from table of contents on page 2)
 SECTIONS = {

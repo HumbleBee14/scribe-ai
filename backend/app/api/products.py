@@ -6,6 +6,7 @@ The registry builds ProductRuntime for the agent from the filesystem.
 """
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -21,10 +22,33 @@ from app.packs.registry import get_product_registry, _slugify, _ensure_product_d
 router = APIRouter(prefix="/api/products", tags=["products"])
 
 
+def _rebuild_merged_chunks(product_dir: Path) -> None:
+    """Merge all per-source chunks.json into a single merged_chunks.json for search."""
+    index_dir = product_dir / "index"
+    merged: list[dict] = []
+    for source_dir in sorted(index_dir.iterdir()):
+        if not source_dir.is_dir():
+            continue
+        chunks_path = source_dir / "chunks.json"
+        if chunks_path.exists():
+            try:
+                chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
+                merged.extend(chunks)
+            except (json.JSONDecodeError, OSError):
+                pass
+    merged_path = index_dir / "chunks.json"
+    merged_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 class CreateProductRequest(BaseModel):
     name: str
     description: str = ""
     categories: list[str] = []
+
+
+class UpdateProductRequest(BaseModel):
+    description: str | None = None
+    categories: list[str] | None = None
 
 
 def _serialize_product(product_id: str) -> dict[str, object]:
@@ -84,6 +108,23 @@ def list_products_api() -> dict[str, object]:
 
 @router.get("/{product_id}")
 def get_product_api(product_id: str) -> dict[str, object]:
+    return _serialize_product(product_id)
+
+
+@router.patch("/{product_id}")
+def update_product_api(product_id: str, request: UpdateProductRequest) -> dict[str, object]:
+    row = db.get_product(product_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Unknown product: {product_id}")
+
+    updates: dict = {}
+    if request.description is not None:
+        updates["description"] = request.description.strip()
+    if updates:
+        db.update_product(product_id, **updates)
+    if request.categories is not None:
+        db.set_categories(product_id, request.categories[:3])
+
     return _serialize_product(product_id)
 
 
@@ -262,21 +303,28 @@ def delete_document_api(product_id: str, source_id: str) -> dict[str, object]:
     if not db.remove_source(product_id, source_id):
         raise HTTPException(status_code=404, detail=f"Unknown source: {source_id}")
 
-    # Remove the actual file from disk
+    # Remove all artifacts associated with this source
+    product_dir = PRODUCTS_DIR / product_id
     if source_info and source_info.get("path"):
-        file_path = PRODUCTS_DIR / product_id / source_info["path"]
+        file_path = product_dir / source_info["path"]
         if file_path.exists():
             file_path.unlink()
 
-    # Remove any rendered page assets for this source
-    pages_dir = PRODUCTS_DIR / product_id / "assets" / "pages" / source_id
-    if pages_dir.exists():
-        shutil.rmtree(pages_dir)
+    # Remove per-source derived data: pages, figures, chunks
+    for subpath in [
+        product_dir / "assets" / "pages" / source_id,
+        product_dir / "assets" / "figures" / source_id,
+        product_dir / "index" / source_id,
+    ]:
+        if subpath.exists():
+            shutil.rmtree(subpath)
 
-    # Reset status: draft if no docs left, keep current otherwise
+    # Rebuild merged chunks from remaining sources
+    _rebuild_merged_chunks(product_dir)
+
+    # Reset status
     remaining = db.get_source_count(product_id)
-    if remaining == 0:
-        db.update_product_status(product_id, "draft")
+    db.update_product_status(product_id, "draft" if remaining == 0 else "ready")
 
     registry = get_product_registry()
     registry._cache.pop(product_id, None)

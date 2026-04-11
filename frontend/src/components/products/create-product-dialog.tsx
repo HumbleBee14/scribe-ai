@@ -17,6 +17,7 @@ import {
   fetchProduct,
   getProductIngestionStatus,
   ProductSummary,
+  updateProduct,
   uploadProductDocuments,
   uploadProductLogo,
 } from "@/lib/api";
@@ -160,7 +161,12 @@ export function CreateProductDialog({ open, editMode, initialData, onClose, onCr
     setIsSubmitting(true);
     try {
       if (editMode && productId) {
-        // Edit: just re-fetch latest state (files already uploaded)
+        // Edit: save metadata changes + logo
+        setSubmitProgress("Saving changes...");
+        await updateProduct(productId, {
+          description: description.trim(),
+          categories,
+        });
         if (logo) {
           setSubmitProgress("Uploading logo...");
           await uploadProductLogo(productId, logo);

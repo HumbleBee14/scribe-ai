@@ -142,9 +142,9 @@ export function ProductDashboard({
                 </div>
               </div>
 
-              {(product.categories?.length ? product.categories : [product.domain]).length > 0 && (
+              {product.categories?.length > 0 && (
                 <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                  {(product.categories?.length ? product.categories : [product.domain]).slice(0, 3).map((cat) => (
+                  {product.categories.slice(0, 3).map((cat) => (
                     <span
                       key={cat}
                       className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600 dark:bg-neutral-800 dark:text-neutral-300"
