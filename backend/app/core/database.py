@@ -531,8 +531,16 @@ def get_page_detailed_text(product_id: str, source_id: str, pages: list[int]) ->
 def search_pages_fts(product_id: str, query: str, limit: int = 10) -> list[dict[str, Any]]:
     """Full-text search across all page content for a product.
 
-    Converts query to OR-separated tokens so pages matching ANY term are returned,
-    ranked by how many terms match (BM25 scoring).
+    Uses weighted BM25 to rank results — column order in page_fts is
+    (summary, detailed_text, keywords), so weights below match that order:
+      keywords column      weight=5.0  (curated, high-signal)
+      summary column       weight=3.0  (short description, medium-signal)
+      detailed_text column weight=1.0  (large blob, low-signal per match)
+
+    Multi-word matches naturally outscore single-word matches because BM25 sums
+    per-term scores. Stop words ("the", "is", "what") appear on nearly every
+    page so their IDF approaches 0 — BM25 downweights them automatically.
+    No explicit stop-word list needed.
     """
     conn = _get_conn()
     # Sanitize and convert to OR-separated tokens
@@ -545,11 +553,11 @@ def search_pages_fts(product_id: str, query: str, limit: int = 10) -> list[dict[
     try:
         rows = conn.execute(
             """SELECT pa.source_id, pa.page, pa.summary, pa.keywords,
-                      rank AS fts_rank
+                      bm25(page_fts, 3.0, 1.0, 5.0) AS fts_rank
                FROM page_fts
                JOIN page_analysis pa ON page_fts.rowid = pa.rowid
                WHERE page_fts MATCH ? AND pa.product_id = ?
-               ORDER BY rank
+               ORDER BY bm25(page_fts, 3.0, 1.0, 5.0)
                LIMIT ?""",
             (fts_query, product_id, limit),
         ).fetchall()

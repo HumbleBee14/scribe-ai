@@ -117,25 +117,51 @@ TOOL_DEFINITIONS: list[dict] = [
 
 
 def _hybrid_search(product_id: str, query: str, limit: int = 8) -> list[dict]:
-    """Combine FTS5 keyword search + embedding vector search.
+    """Combine FTS5 keyword search + embedding vector search into a single ranked list.
 
-    Scoring: 0.5 * embedding_similarity + 0.5 * fts5_presence
+    FTS score (0.10–0.50):  rank-normalized BM25 from weighted columns.
+      keywords column weight=5.0, summary=3.0, detailed_text=1.0.
+      Best FTS result → 0.50.  Proportional decay, floor 0.10.
+      Multi-word matches in keywords automatically outscore single-word
+      matches in a large blob because BM25 sums per-term IDF*TF scores.
+      Stop words contribute ~0 via IDF — no explicit filter needed.
+
+    Vec score (0.0–0.50):   max(0, 1 - distance/2) * 0.5
+      all-MiniLM-L6-v2 produces unit-normalized vectors; sqlite-vec
+      returns L2 distances in [0, 2]: 0=identical, ~1.4=orthogonal.
+
+    Combined score examples:
+      FTS only (top BM25)         → 0.50  (strong keyword match)
+      FTS only (weak/partial)     → 0.10  (floor, noise)
+      Vec only (distance≈0.1)     → 0.45  (very strong semantic)
+      Vec only (distance≈0.5)     → 0.35  (good semantic)
+      FTS top + great vec         → 0.95
+      FTS top + mediocre vec      → 0.65
+
     Deduplicates by (source_id, page).
     """
     seen: dict[tuple[str, int], dict] = {}
 
-    # FTS5 keyword search
+    # FTS5 keyword search — rank-normalized scoring
+    # BM25 rank from FTS5 is negative (more negative = better match).
+    # Normalize within result set: best hit → 0.50, proportional decay, floor 0.10.
     fts_results = db.search_pages_fts(product_id, query, limit=limit * 2)
+    best_abs_rank = abs(fts_results[0]["fts_rank"]) if fts_results else 1.0
+    if best_abs_rank < 1e-9:
+        best_abs_rank = 1.0  # guard against zero-rank edge case
     for r in fts_results:
         key = (r["source_id"], r["page"])
         if key not in seen:
+            abs_rank = abs(r.get("fts_rank") or 0.0)
+            # Scale proportionally: top result → 0.50, floor at 0.10
+            fts_score = max(0.10, (abs_rank / best_abs_rank) * 0.50)
             seen[key] = {
                 "source_id": r["source_id"],
                 "page": r["page"],
                 "summary": r["summary"],
                 "fts_hit": True,
                 "vec_distance": None,
-                "score": 0.5,  # base score for FTS hit
+                "score": fts_score,
             }
 
     # Embedding vector search
@@ -146,9 +172,10 @@ def _hybrid_search(product_id: str, query: str, limit: int = 8) -> list[dict]:
             vec_results = db.search_by_embedding(product_id, query_blob, limit=limit * 2)
             for r in vec_results:
                 key = (r["source_id"], r["page"])
-                # Lower distance = more similar. Normalize to 0-1 score.
-                distance = r.get("distance", 10.0)
-                vec_score = max(0, 1.0 - distance / 20.0)  # rough normalization
+                # L2 distance on unit vectors: range [0, 2].
+                # 0 = identical, √2 ≈ 1.41 = orthogonal, 2 = opposite direction.
+                distance = r.get("distance", 2.0)
+                vec_score = max(0.0, 1.0 - distance / 2.0)
                 if key in seen:
                     seen[key]["vec_distance"] = distance
                     seen[key]["score"] += vec_score * 0.5

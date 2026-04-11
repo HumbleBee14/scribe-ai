@@ -383,16 +383,7 @@ class AgentOrchestrator:
         """Emit specialized SSE events based on which tool was called."""
         results: list[dict[str, Any]] = []
 
-        if tool_name == "lookup_safety_warnings":
-            category = tool_input.get("category")
-            if category:
-                session.safety_warnings_shown.add(category)
-                results.append({
-                    "event": "session_update",
-                    "data": session.to_dict(),
-                })
-
-        elif tool_name == "clarify_question":
+        if tool_name == "clarify_question":
             question = tool_input.get("question", "")
             options = tool_input.get("options")
             results.append({

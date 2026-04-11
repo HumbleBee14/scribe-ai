@@ -80,22 +80,59 @@ def build_initial_search_context(product_id: str, user_message: str) -> str:
         print(f"[SEARCH] No results for: {user_message}", flush=True)
         return ""
 
-    # Log scores
-    print(f"\n[SEARCH] Query: {user_message}", flush=True)
-    for r in results:
-        print(f"  [{r['source_id']}] p{r['page']}: score={r.get('score', 0):.3f} fts={r['fts_hit']} vec_dist={r.get('vec_distance', 'N/A')}", flush=True)
+    # Two-path qualification — a page qualifies for context injection if EITHER:
+    #
+    # Path A — Strong standalone semantic match (vec_distance < 0.80)
+    #   For page-level embeddings of a product manual, empirical data shows:
+    #     Best relevant match:    vec_dist ≈ 0.75-0.80  (e.g. very on-topic page)
+    #     Typical relevant match: vec_dist ≈ 0.85-1.05
+    #     Unrelated page:         vec_dist > 1.2
+    #   Threshold 0.80 catches genuinely similar pages even if FTS has no keyword hit.
+    #   Useful for paraphrase/synonym queries ("bubbly welds" → "porosity").
+    #
+    # Path B — BOTH signals present + combined score (fts AND vec AND score >= 0.52)
+    #   Requires: FTS keyword found + vec match found (not None) + combined >= 0.52.
+    #   The explicit vec_dist is not None check prevents pure FTS-only hits
+    #   (which cap at 0.50) from passing — they only got FTS, no semantic signal.
+    #   0.52 sits above the max FTS-only score (0.50), so it can only be reached
+    #   when both signals contribute.
+    #
+    # Pure FTS-only (vec_dist=None, score≤0.50) → never qualifies.
+    def _qualifies(r: dict) -> tuple[bool, str]:
+        vec_dist = r.get("vec_distance")
+        score = r.get("score", 0)
+        fts_hit = r.get("fts_hit", False)
+        # Path A: strong standalone semantic match, regardless of FTS
+        if vec_dist is not None and vec_dist < 0.80:
+            return True, f"path=A"
+        # Path B: both signals present + combined score threshold
+        if fts_hit and vec_dist is not None and score >= 0.52:
+            return True, f"path=B"
+        return False, "skip"
 
-    # Filter out low relevance results
-    MIN_SCORE = 0.75
-    filtered = [r for r in results if r.get("score", 0) >= MIN_SCORE]
+    print(f"\n[SEARCH] Query: {user_message[:100]!r}", flush=True)
+    filtered = []
+    for r in results:
+        qualifies, path = _qualifies(r)
+        vec_str = f"{r['vec_distance']:.3f}" if r.get("vec_distance") is not None else "none"
+        status = f"✓ {path}" if qualifies else "✗ skip"
+        print(
+            f"  [{r['source_id']}] p{r['page']:>2}  "
+            f"score={r.get('score', 0):.3f}  fts={'Y' if r['fts_hit'] else 'N'}  "
+            f"vec={vec_str}  → {status}",
+            flush=True,
+        )
+        if qualifies:
+            filtered.append(r)
+
     if not filtered:
-        print(f"[SEARCH] All results below threshold ({MIN_SCORE}), skipping context", flush=True)
+        print("[SEARCH] No pages qualified → skipping context injection", flush=True)
         return ""
 
-    if len(filtered) < len(results):
-        print(f"[SEARCH] Filtered {len(results)} -> {len(filtered)} (threshold {MIN_SCORE})", flush=True)
+    injected = [(r["source_id"], r["page"]) for r in filtered]
+    print(f"[SEARCH] Injecting {len(injected)} page(s): {injected}", flush=True)
 
-    # Reverse: least relevant first, most relevant last
+    # Reverse: least relevant first, most relevant last (recency bias)
     filtered = list(reversed(filtered))
 
     # Fetch full detailed_text for each page
