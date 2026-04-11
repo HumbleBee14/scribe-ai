@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, LibraryBig, Loader2, PanelLeftOpen } from "lucide-react";
+import { Home, LibraryBig, Loader2, PanelLeftOpen } from "lucide-react";
 import {
   BACKEND_URL,
   fetchProducts,
@@ -41,7 +41,7 @@ export function ProductWorkspace({ initialProductId }: Props) {
     [products, activeProductId]
   );
 
-  const { messages, isStreaming, session, sendMessage, stopStreaming, clearMessages } =
+  const { messages, isStreaming, sendMessage, stopStreaming, clearMessages } =
     useChat(activeProductId, conversationId);
 
   const artifacts = useMemo(() => extractArtifactsFromMessages(messages), [messages]);
@@ -177,6 +177,13 @@ export function ProductWorkspace({ initialProductId }: Props) {
     );
   }
 
+  const ingestionLabel =
+    activeProduct.ingestion.status === "ready"
+      ? "Ready"
+      : activeProduct.ingestion.status === "processing"
+        ? "Ingesting"
+        : "Draft";
+
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-neutral-950">
       {historyOpen && (
@@ -189,43 +196,46 @@ export function ProductWorkspace({ initialProductId }: Props) {
         />
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3 dark:border-neutral-700 dark:bg-neutral-900 shrink-0">
-          <div className="flex items-center gap-3">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="relative flex shrink-0 items-center border-b border-gray-200 bg-white px-3 py-3 dark:border-neutral-700 dark:bg-neutral-900 sm:px-5 sm:py-3.5">
+          <div className="relative z-10 flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
+            <Link
+              href="/"
+              className="-m-1 inline-flex shrink-0 rounded-md p-1 text-gray-500 transition-colors hover:text-orange-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 dark:text-neutral-500 dark:hover:text-orange-400"
+              title="Home"
+              aria-label="Home"
+            >
+              <Home suppressHydrationWarning className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </Link>
             {!historyOpen && (
               <button
+                type="button"
                 onClick={() => setHistoryOpen(true)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-gray-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-100"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-gray-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-100"
                 title="Show history"
               >
                 <PanelLeftOpen suppressHydrationWarning className="h-4 w-4" />
               </button>
             )}
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-600 dark:border-neutral-700 dark:text-neutral-300"
-            >
-              <ArrowLeft suppressHydrationWarning className="h-3.5 w-3.5" />
-              Products
-            </Link>
-            <div>
-              <h1 className="text-sm font-semibold text-gray-900 dark:text-neutral-100">
-                {activeProduct.name}
-              </h1>
-              <p className="text-xs text-gray-400 dark:text-neutral-500">
-                {activeProduct.description || "Local-first multimodal manual assistant"}
-              </p>
-            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-xl font-black uppercase tracking-[0.38em] text-orange-600 transition-colors hover:text-orange-700 sm:text-2xl sm:tracking-[0.42em] xl:left-[calc(50%-10rem)] dark:text-orange-400 dark:hover:text-orange-300"
+            title="Back to workspaces"
+          >
+            Prox
+          </Link>
+
+          <div className="relative z-10 flex min-w-0 flex-1 items-center justify-end gap-2">
             <select
               value={activeProductId}
               onChange={(event) => {
                 const nextProductId = event.target.value;
                 window.location.href = `/products/${nextProductId}`;
               }}
-              className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+              className="h-8 max-w-[9rem] rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 sm:max-w-[14rem]"
+              aria-label="Switch product workspace"
             >
               {products.map((product) => (
                 <option key={product.id} value={product.id}>
@@ -236,8 +246,8 @@ export function ProductWorkspace({ initialProductId }: Props) {
             <button
               type="button"
               onClick={() => setMobileContextOpen(true)}
-              className="flex h-8 items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-600 transition-colors hover:text-gray-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:text-white lg:hidden"
-              title="Open context, sources, and artifacts"
+              className="flex h-8 items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-600 transition-colors hover:text-gray-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:text-white xl:hidden"
+              title="Workspace, sources, and artifacts"
             >
               <LibraryBig suppressHydrationWarning className="h-4 w-4" />
               Context
@@ -247,7 +257,7 @@ export function ProductWorkspace({ initialProductId }: Props) {
         </header>
 
         {activeProduct.ingestion.status !== "ready" && (
-          <div className="border-b border-orange-200 bg-orange-50 px-5 py-2 text-xs text-orange-700 dark:border-orange-900/40 dark:bg-orange-950/30 dark:text-orange-200">
+          <div className="shrink-0 border-b border-orange-200 bg-orange-50 px-5 py-2 text-xs text-orange-700 dark:border-orange-900/40 dark:bg-orange-950/30 dark:text-orange-200">
             {activeProduct.ingestion.status === "processing" ? (
               <span className="inline-flex items-center gap-2">
                 <Loader2 suppressHydrationWarning className="h-3.5 w-3.5 animate-spin" />
@@ -262,7 +272,7 @@ export function ProductWorkspace({ initialProductId }: Props) {
 
         <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="flex min-h-0 flex-col">
-            <div className="flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {messages.length === 0 ? (
                 <div className="flex min-h-full">
                   <WelcomeScreen
@@ -289,7 +299,7 @@ export function ProductWorkspace({ initialProductId }: Props) {
               )}
             </div>
 
-            <div className="border-t border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="shrink-0 border-t border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900">
               <div className="mx-auto max-w-6xl">
                 <ChatInput
                   onSend={handleSend}
@@ -301,8 +311,27 @@ export function ProductWorkspace({ initialProductId }: Props) {
             </div>
           </div>
 
-          <aside className="hidden border-l border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900 xl:flex xl:flex-col">
-            <div className="flex-1 space-y-6 overflow-y-auto p-4">
+          <aside className="hidden min-h-0 flex-col border-l border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900 xl:flex">
+            <div className="shrink-0 border-b border-gray-200 px-4 py-3 dark:border-neutral-700">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500">
+                Product workspace
+              </p>
+              <h2 className="mt-1 text-sm font-semibold leading-snug text-gray-900 dark:text-neutral-100">
+                {activeProduct.name}
+              </h2>
+              <p className="mt-2 text-xs leading-relaxed text-gray-600 dark:text-neutral-400">
+                {activeProduct.description || "Local-first multimodal manual assistant"}
+              </p>
+              <p className="mt-2.5 text-[11px] text-gray-500 dark:text-neutral-500">
+                {activeProduct.document_count}{" "}
+                {activeProduct.document_count === 1 ? "manual" : "manuals"}
+                <span className="mx-2 text-gray-300 dark:text-neutral-600" aria-hidden>
+                  ·
+                </span>
+                <span className="font-medium text-gray-600 dark:text-neutral-400">{ingestionLabel}</span>
+              </p>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
               <SourceViewer
                 productId={activeProduct.id}
                 selectedSource={selectedSource}
@@ -317,7 +346,12 @@ export function ProductWorkspace({ initialProductId }: Props) {
         open={mobileContextOpen}
         onClose={() => setMobileContextOpen(false)}
         productId={activeProduct.id}
-        session={session}
+        productName={activeProduct.name}
+        productDescription={
+          activeProduct.description || "Local-first multimodal manual assistant"
+        }
+        documentCount={activeProduct.document_count}
+        ingestionLabel={ingestionLabel}
         selectedSource={selectedSource}
         artifacts={artifacts}
       />

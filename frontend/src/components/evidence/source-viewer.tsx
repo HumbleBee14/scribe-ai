@@ -16,7 +16,7 @@ interface Props {
 
 export function SourceViewer({ productId, selectedSource, artifacts }: Props) {
   return (
-    <div className="mt-6 space-y-4">
+    <div className="space-y-5">
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
           Source Viewer

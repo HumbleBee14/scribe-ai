@@ -10,6 +10,9 @@ import {
   saveConversation,
 } from "@/lib/history";
 
+/** Tailwind width classes for the history rail — keep in sync with the workspace header brand column. */
+export const HISTORY_SIDEBAR_WIDTH_CLASS = "w-60 shrink-0";
+
 interface Props {
   productId: string;
   activeId: string | null;
@@ -53,7 +56,9 @@ export function HistorySidebar({
   };
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950">
+    <aside
+      className={`flex min-h-0 flex-col border-r border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-950 ${HISTORY_SIDEBAR_WIDTH_CLASS}`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-700 px-3 py-2.5">
         <button
