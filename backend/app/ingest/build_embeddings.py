@@ -21,12 +21,19 @@ _model = None
 
 
 def _get_model():
-    """Load sentence-transformers model (downloads on first use)."""
+    """Load sentence-transformers model. Downloads on first use, then uses local cache."""
     global _model
     if _model is None:
         try:
+            import os
+            os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+            logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
             from sentence_transformers import SentenceTransformer
-            _model = SentenceTransformer("all-MiniLM-L6-v2")
+            # Try local cache first, fall back to download
+            try:
+                _model = SentenceTransformer("all-MiniLM-L6-v2", local_files_only=True)
+            except Exception:
+                _model = SentenceTransformer("all-MiniLM-L6-v2")
             logger.info("Loaded embedding model: all-MiniLM-L6-v2")
         except ImportError:
             logger.warning(

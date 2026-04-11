@@ -193,6 +193,55 @@ Rules:
 MAX_RETRIES = 2
 
 
+def _fix_json_quotes(s: str) -> str:
+    """Fix unescaped double quotes inside JSON string values.
+
+    LLMs sometimes produce: "text": "the word "live" appears here"
+    which breaks JSON parsing. This fixes it to: "the word \\"live\\" appears here"
+    """
+    # Strategy: find string values and escape internal unescaped quotes.
+    # We look for patterns like: "key": "value with "bad" quotes"
+    # and fix the inner quotes.
+    result = []
+    in_string = False
+    escape_next = False
+    i = 0
+    while i < len(s):
+        ch = s[i]
+        if escape_next:
+            result.append(ch)
+            escape_next = False
+            i += 1
+            continue
+        if ch == '\\':
+            result.append(ch)
+            escape_next = True
+            i += 1
+            continue
+        if ch == '"':
+            if not in_string:
+                in_string = True
+                result.append(ch)
+            else:
+                # Check if this quote ends the string value or is an inner quote
+                # Look ahead: if followed by , or } or ] or : or whitespace+any of those, it's structural
+                rest = s[i + 1:].lstrip()
+                if rest and rest[0] in ',}]:':
+                    in_string = False
+                    result.append(ch)
+                elif not rest:
+                    in_string = False
+                    result.append(ch)
+                else:
+                    # Inner quote - escape it
+                    result.append('\\"')
+            i += 1
+            continue
+        result.append(ch)
+        i += 1
+    return ''.join(result)
+
+
 def analyze_page(
     image_path: Path,
     product_id: str,
@@ -252,7 +301,14 @@ def analyze_page(
             # Extract JSON from code block
             code_match = re.search(r"```(?:json)?\s*\n([\s\S]*?)\n\s*```", raw)
             json_str = code_match.group(1).strip() if code_match else raw
-            result = json.loads(json_str)
+
+            try:
+                result = json.loads(json_str)
+            except json.JSONDecodeError:
+                # LLM sometimes leaves unescaped quotes inside string values.
+                # Fix: escape quotes that aren't JSON structural quotes.
+                fixed = _fix_json_quotes(json_str)
+                result = json.loads(fixed)
 
             # Store in DB
             db.upsert_page_analysis(
@@ -268,11 +324,22 @@ def analyze_page(
             if result.get("is_toc"):
                 _extract_toc_entries(product_id, source_id, page_number, result.get("detailed_text", ""))
 
-            logger.info(
-                "[OCR] %s/%s page %d/%d: OK (%d chars, toc=%s)",
-                product_id, source_id, page_number, total_pages,
-                len(result.get("detailed_text", "")),
-                result.get("is_toc", False),
+            # Log with cache stats
+            usage = response.usage
+            cache_read = getattr(usage, "cache_read_input_tokens", 0)
+            cache_created = getattr(usage, "cache_creation_input_tokens", 0)
+            cache_info = ""
+            if cache_read:
+                cache_info = f", cache_read={cache_read}"
+            elif cache_created:
+                cache_info = f", cache_created={cache_created}"
+
+            print(
+                f"[OCR] {product_id}/{source_id} page {page_number}/{total_pages}: "
+                f"{len(result.get('detailed_text', ''))} chars, "
+                f"in={usage.input_tokens} out={usage.output_tokens}"
+                f"{cache_info}",
+                flush=True,
             )
             return result
 
