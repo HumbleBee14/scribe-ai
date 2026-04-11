@@ -4,6 +4,8 @@ All initialization logic lives here so main.py stays clean.
 """
 from __future__ import annotations
 
+import logging
+import threading
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -13,12 +15,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import DATA_DIR, PRODUCTS_DIR, settings
 from app.core.database import init_db
 
+logger = logging.getLogger(__name__)
+
+
+def _process_pending_products() -> None:
+    """Check for products with sources but not yet processed. Run ingestion for each."""
+    from app.core import database as db
+    from app.ingest.jobs import run_ingestion_job
+
+    for product in db.list_products():
+        has_sources = len(product["sources"]) > 0
+        status = product["status"]
+        if has_sources and status not in ("ready", "processing"):
+            logger.info("Auto-processing product: %s", product["id"])
+            try:
+                run_ingestion_job(product["id"])
+            except Exception:
+                logger.exception("Auto-processing failed for %s", product["id"])
+
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     PRODUCTS_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
+    # Check for unprocessed products in a background thread
+    threading.Thread(target=_process_pending_products, daemon=True).start()
     yield
 
 

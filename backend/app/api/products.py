@@ -162,6 +162,7 @@ def delete_product_api(product_id: str) -> dict[str, object]:
 @router.post("/{product_id}/documents")
 async def upload_documents_api(
     product_id: str,
+    background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
     source_type: str = Form("manual"),
 ) -> dict[str, object]:
@@ -200,6 +201,10 @@ async def upload_documents_api(
 
     registry = get_product_registry()
     registry._cache.pop(product_id, None)
+
+    # Auto-trigger ingestion in the background
+    enqueue_ingestion(product_id, background_tasks)
+
     return _serialize_product(product_id)
 
 
