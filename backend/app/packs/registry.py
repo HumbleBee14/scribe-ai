@@ -337,6 +337,24 @@ class ProductRegistry:
         root_dir = manifest_path.parent
         manifest = self._parse_manifest(manifest_data)
 
+        # Merge sources from database (source of truth for uploads)
+        try:
+            from app.core.database import get_sources
+            db_sources = get_sources(manifest.id)
+            if db_sources:
+                yaml_ids = {s.id for s in manifest.sources}
+                for s in db_sources:
+                    if s["source_id"] not in yaml_ids:
+                        manifest.sources.append(PackSource(
+                            id=s["source_id"],
+                            path=s["path"],
+                            type=s["type"],
+                            label=s.get("label"),
+                            pages=s.get("pages"),
+                        ))
+        except Exception:
+            pass  # DB not initialized yet (startup)
+
         # Ensure all subdirs exist (idempotent, works on any OS)
         _ensure_product_dirs(root_dir)
 

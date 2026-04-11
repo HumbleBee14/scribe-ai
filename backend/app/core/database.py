@@ -71,6 +71,10 @@ def init_db() -> None:
             type TEXT NOT NULL DEFAULT 'manual',
             label TEXT,
             pages INTEGER,
+            processing_status TEXT NOT NULL DEFAULT 'pending',
+            pages_rendered INTEGER DEFAULT 0,
+            chunks_extracted INTEGER DEFAULT 0,
+            processing_error TEXT,
             created_at TEXT NOT NULL,
             UNIQUE(product_id, source_id)
         );
@@ -93,6 +97,25 @@ def init_db() -> None:
             message TEXT NOT NULL
         );
     """)
+    conn.commit()
+
+    # Migrations: add columns that may not exist in older databases
+    _migrate(conn)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns to existing tables if missing. Safe to run repeatedly."""
+    migrations = [
+        ("sources", "processing_status", "TEXT DEFAULT 'pending'"),
+        ("sources", "pages_rendered", "INTEGER DEFAULT 0"),
+        ("sources", "chunks_extracted", "INTEGER DEFAULT 0"),
+        ("sources", "processing_error", "TEXT"),
+    ]
+    for table, column, coltype in migrations:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
     conn.commit()
 
 
@@ -198,8 +221,8 @@ def add_source(
     conn = _get_conn()
     conn.execute(
         """INSERT OR REPLACE INTO sources
-           (product_id, source_id, filename, path, type, label, pages, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+           (product_id, source_id, filename, path, type, label, pages, processing_status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)""",
         (product_id, source_id, filename, path, source_type, label or filename, pages, _now()),
     )
     conn.commit()
@@ -208,10 +231,50 @@ def add_source(
 def get_sources(product_id: str) -> list[dict[str, Any]]:
     conn = _get_conn()
     rows = conn.execute(
-        "SELECT source_id, filename, path, type, label, pages FROM sources WHERE product_id = ? ORDER BY id",
+        """SELECT source_id, filename, path, type, label, pages,
+                  processing_status, pages_rendered, chunks_extracted, processing_error
+           FROM sources WHERE product_id = ? ORDER BY id""",
         (product_id,),
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def update_source_processing(
+    product_id: str,
+    source_id: str,
+    status: str,
+    pages_rendered: int = 0,
+    chunks_extracted: int = 0,
+    error: str | None = None,
+) -> None:
+    conn = _get_conn()
+    conn.execute(
+        """UPDATE sources SET processing_status = ?, pages_rendered = ?,
+           chunks_extracted = ?, processing_error = ?
+           WHERE product_id = ? AND source_id = ?""",
+        (status, pages_rendered, chunks_extracted, error, product_id, source_id),
+    )
+    conn.commit()
+
+
+def get_pending_sources(product_id: str) -> list[dict[str, Any]]:
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT source_id, filename, path, type, label, pages
+           FROM sources WHERE product_id = ? AND processing_status = 'pending'
+           ORDER BY id""",
+        (product_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def all_sources_processed(product_id: str) -> bool:
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT COUNT(*) as c FROM sources WHERE product_id = ? AND processing_status != 'done'",
+        (product_id,),
+    ).fetchone()
+    return row["c"] == 0
 
 
 def remove_source(product_id: str, source_id: str) -> bool:

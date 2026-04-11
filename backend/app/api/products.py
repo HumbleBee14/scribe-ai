@@ -80,6 +80,10 @@ def _serialize_product(product_id: str) -> dict[str, object]:
                 "type": s["type"],
                 "label": s.get("label") or s["type"],
                 "pages": s.get("pages"),
+                "processing_status": s.get("processing_status", "pending"),
+                "pages_rendered": s.get("pages_rendered", 0),
+                "chunks_extracted": s.get("chunks_extracted", 0),
+                "processing_error": s.get("processing_error"),
             }
             for s in row["sources"]
         ],

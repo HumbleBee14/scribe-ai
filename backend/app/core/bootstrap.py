@@ -19,19 +19,20 @@ logger = logging.getLogger(__name__)
 
 
 def _process_pending_products() -> None:
-    """Check for products with sources but not yet processed. Run ingestion for each."""
+    """Check for any pending source documents across all products and process them."""
     from app.core import database as db
-    from app.ingest.jobs import run_ingestion_job
+    from app.ingest.jobs import process_single_document
 
     for product in db.list_products():
-        has_sources = len(product["sources"]) > 0
-        status = product["status"]
-        if has_sources and status not in ("ready", "processing"):
-            logger.info("Auto-processing product: %s", product["id"])
-            try:
-                run_ingestion_job(product["id"])
-            except Exception:
-                logger.exception("Auto-processing failed for %s", product["id"])
+        pending = db.get_pending_sources(product["id"])
+        if pending:
+            db.update_product_status(product["id"], "processing")
+            for source in pending:
+                logger.info("Auto-processing: %s/%s", product["id"], source["source_id"])
+                try:
+                    process_single_document(product["id"], source["source_id"])
+                except Exception:
+                    logger.exception("Auto-processing failed: %s/%s", product["id"], source["source_id"])
 
 
 @asynccontextmanager

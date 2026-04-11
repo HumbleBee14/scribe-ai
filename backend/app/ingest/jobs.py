@@ -1,17 +1,19 @@
 """Background ingestion job management.
 
-Writes status to both SQLite (for fast API reads) and the registry
-(for YAML-based status files used by the agent runtime).
+Each source document is processed independently as its own background task.
+Per-document status is tracked in the sources table.
+Product-level status is derived: all sources done = ready.
 """
 from __future__ import annotations
 
 import logging
 import threading
+
 from fastapi import BackgroundTasks
 
 from app.core import database as db
-from app.ingest.pipeline import ingest_product
-from app.packs.models import IngestionStatus
+from app.ingest.pipeline import ingest_single_source, rebuild_merged_index
+from app.packs.models import IngestionStatus, PackSource
 from app.packs.registry import get_product_registry
 from app.retrieval.service import reset_retrieval_service
 
@@ -21,61 +23,122 @@ _ingestion_locks: dict[str, threading.Lock] = {}
 _locks_guard = threading.Lock()
 
 
-def _get_lock(product_id: str) -> threading.Lock:
+def _get_lock(key: str) -> threading.Lock:
     with _locks_guard:
-        if product_id not in _ingestion_locks:
-            _ingestion_locks[product_id] = threading.Lock()
-        return _ingestion_locks[product_id]
-
-
-def _save_status(product_id: str, status: str, stage: str, progress: float, message: str, error: str | None = None) -> None:
-    """Write ingestion status to both database and registry YAML."""
-    db.save_ingestion_status(product_id, status, stage, progress, message, error)
-    registry = get_product_registry()
-    registry.save_status(product_id, IngestionStatus(
-        product_id=product_id, status=status, stage=stage,
-        progress=progress, message=message, error=error,
-    ))
+        if key not in _ingestion_locks:
+            _ingestion_locks[key] = threading.Lock()
+        return _ingestion_locks[key]
 
 
 def enqueue_ingestion(product_id: str, background_tasks: BackgroundTasks) -> IngestionStatus:
-    registry = get_product_registry()
-    runtime = registry.require_product(product_id)
+    """Queue background processing for all pending source documents."""
+    pending = db.get_pending_sources(product_id)
+    if not pending:
+        return IngestionStatus(
+            product_id=product_id, status="ready", stage="complete",
+            progress=1.0, message="All documents already processed.",
+        )
 
-    lock = _get_lock(product_id)
+    db.update_product_status(product_id, "processing")
+
+    for source in pending:
+        background_tasks.add_task(
+            process_single_document,
+            product_id,
+            source["source_id"],
+        )
+
+    return IngestionStatus(
+        product_id=product_id, status="processing", stage="queued",
+        progress=0.05, message=f"Processing {len(pending)} document(s)...",
+    )
+
+
+def process_single_document(product_id: str, source_id: str) -> None:
+    """Process one source document. Updates per-source and product-level status."""
+    lock = _get_lock(f"{product_id}:{source_id}")
     if not lock.acquire(blocking=False):
-        status = registry.load_status(product_id)
-        return status
+        logger.info("Already processing %s/%s, skipping", product_id, source_id)
+        return
 
     try:
-        status = registry.load_status(product_id)
-        if status.status == "processing":
-            return status
+        logger.info("Processing document: %s/%s", product_id, source_id)
+        db.update_source_processing(product_id, source_id, "processing")
 
-        _save_status(product_id, "processing", "queued", 0.05, f"Ingestion queued for {runtime.product_name}.")
-        db.update_product_status(product_id, "processing")
-        background_tasks.add_task(run_ingestion_job, product_id)
-        return IngestionStatus(product_id=product_id, status="processing", stage="queued", progress=0.05, message=f"Ingestion queued for {runtime.product_name}.")
-    finally:
-        lock.release()
-
-
-def run_ingestion_job(product_id: str) -> None:
-    registry = get_product_registry()
-    try:
-        _save_status(product_id, "processing", "rendering", 0.25, "Rendering page images and extracting chunks.")
-
+        registry = get_product_registry()
+        registry._cache.pop(product_id, None)
         runtime = registry.require_product(product_id)
-        summary = ingest_product(runtime)
 
-        msg = f"Ready: {summary['pages_rendered']} pages rendered, {summary['chunks']} chunks extracted."
-        _save_status(product_id, "ready", "complete", 1.0, msg)
-        db.update_product_status(product_id, "ready")
-        registry.update_manifest_status(product_id, "ready")
-        reset_retrieval_service()
+        # Find the source in the manifest
+        source = next(
+            (s for s in runtime.manifest.sources if s.id == source_id),
+            None,
+        )
+        if source is None:
+            db.update_source_processing(
+                product_id, source_id, "failed",
+                error=f"Source {source_id} not found in manifest",
+            )
+            _check_product_complete(product_id, runtime)
+            return
+
+        stats = ingest_single_source(runtime, source)
+
+        # Update source with results
+        db.update_source_processing(
+            product_id, source_id, "done",
+            pages_rendered=stats["pages_rendered"],
+            chunks_extracted=stats["chunks_extracted"],
+        )
+
+        # Update page count in sources table
+        if stats["pages_rendered"] > 0:
+            conn = db._get_conn()
+            conn.execute(
+                "UPDATE sources SET pages = ? WHERE product_id = ? AND source_id = ?",
+                (stats["pages_rendered"], product_id, source_id),
+            )
+            conn.commit()
+
+        logger.info(
+            "Document processed: %s/%s - %d pages, %d chunks",
+            product_id, source_id, stats["pages_rendered"], stats["chunks_extracted"],
+        )
 
     except Exception as exc:
-        logger.exception("Product ingestion failed for %s", product_id)
-        _save_status(product_id, "failed", "failed", 1.0, "Ingestion failed.", str(exc))
-        db.update_product_status(product_id, "failed")
-        registry.update_manifest_status(product_id, "failed")
+        logger.exception("Failed to process %s/%s", product_id, source_id)
+        db.update_source_processing(
+            product_id, source_id, "failed",
+            error=str(exc),
+        )
+
+    finally:
+        lock.release()
+        # After each document completes, check if all are done
+        registry = get_product_registry()
+        registry._cache.pop(product_id, None)
+        runtime = registry.require_product(product_id)
+        _check_product_complete(product_id, runtime)
+
+
+def _check_product_complete(product_id: str, runtime) -> None:
+    """If all sources are processed, mark product ready and rebuild merged index."""
+    if db.all_sources_processed(product_id):
+        total_chunks = rebuild_merged_index(runtime)
+        db.update_product_status(product_id, "ready")
+        reset_retrieval_service()
+        logger.info(
+            "Product %s ready: merged index has %d chunks",
+            product_id, total_chunks,
+        )
+    else:
+        # Still processing other documents
+        pending = db.get_pending_sources(product_id)
+        if not pending:
+            # No pending but not all done = some failed
+            sources = db.get_sources(product_id)
+            failed = [s for s in sources if s["processing_status"] == "failed"]
+            if failed:
+                logger.warning(
+                    "Product %s has %d failed sources", product_id, len(failed)
+                )
