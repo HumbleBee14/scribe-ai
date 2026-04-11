@@ -35,7 +35,12 @@ export interface SourcePageRef {
 
 export interface ImageEvent {
   event: "image";
-  data: { page: number; url: string };
+  data: {
+    page: number;
+    url: string;
+    product_id?: string;
+    source_id?: string | null;
+  };
 }
 
 export interface ClarificationEvent {
@@ -52,6 +57,8 @@ export interface SessionUpdateEvent {
   event: "session_update";
   data: {
     id: string;
+    product_id?: string;
+    product_name?: string | null;
     current_process: string | null;
     current_voltage: string | null;
     current_material: string | null;
@@ -111,6 +118,8 @@ export interface ChatMessage {
 
 export interface SessionState {
   id: string;
+  productId?: string;
+  productName?: string | null;
   currentProcess: string | null;
   currentVoltage: string | null;
   currentMaterial: string | null;
@@ -124,6 +133,7 @@ export interface SelectedSourcePage {
   page: number;
   /** Additional pages to show (for ranges like "pages 35-40"). */
   pages?: number[];
+  sourceId?: string | null;
   title?: string;
   description?: string;
 }

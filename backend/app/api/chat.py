@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.agent.orchestrator import AgentOrchestrator
+from app.packs.registry import get_product_registry
 from app.session.manager import session_manager
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ class ImageInput(BaseModel):
 
 class ChatRequest(BaseModel):
     session_id: str | None = None
+    product_id: str | None = None
     message: str
     images: list[ImageInput] | None = Field(
         default=None,
@@ -46,9 +48,14 @@ class ChatRequest(BaseModel):
 async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
     """Generate SSE events from the agent orchestrator."""
     orchestrator = _get_orchestrator()
+    runtime = get_product_registry().require_product(request.product_id)
 
     # Get or create session
-    session = session_manager.get_or_create(request.session_id)
+    session = session_manager.get_or_create(
+        request.session_id,
+        product_id=runtime.id,
+        product_name=runtime.product_name,
+    )
 
     # Update session context from user message
     session_manager.update_from_message(session, request.message)
@@ -92,10 +99,12 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
             assistant_message = "".join(assistant_chunks).strip()
             if status == "completed" and assistant_message:
                 session_manager.append_turn(session, request.message, assistant_message)
+                pass  # TODO: session summary persistence
             elif status == "clarification_required" and clarification_question:
                 session_manager.append_turn(
                     session, request.message, clarification_question
                 )
+                pass  # TODO: session summary persistence
         yield _sse_event(event["event"], event["data"])
 
 

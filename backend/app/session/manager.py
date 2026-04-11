@@ -12,6 +12,8 @@ class Session:
     """Tracks conversation context so the agent remembers what the user is working on."""
 
     id: str = ""
+    product_id: str = "vulcan-omnipro-220"
+    product_name: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_seen_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     current_process: str | None = None
@@ -26,6 +28,8 @@ class Session:
     def context_summary(self) -> str:
         """Build a natural-language summary for system prompt injection."""
         parts: list[str] = []
+        if self.product_name:
+            parts.append(f"Active product: {self.product_name}.")
         if self.current_process:
             parts.append(f"The user is currently working with {self.current_process} welding.")
         if self.current_voltage:
@@ -48,6 +52,8 @@ class Session:
         """Serialize for API responses."""
         return {
             "id": self.id,
+            "product_id": self.product_id,
+            "product_name": self.product_name,
             "current_process": self.current_process,
             "current_voltage": self.current_voltage,
             "current_material": self.current_material,
@@ -76,17 +82,30 @@ class SessionManager:
         if len(session.message_history) > self._max_history_messages:
             session.message_history = session.message_history[-self._max_history_messages :]
 
-    def get_or_create(self, session_id: str | None = None) -> Session:
+    def get_or_create(
+        self,
+        session_id: str | None = None,
+        *,
+        product_id: str = "vulcan-omnipro-220",
+        product_name: str | None = None,
+    ) -> Session:
         """Get existing session or create a new one."""
         if session_id and session_id in self._sessions:
             existing = self._sessions[session_id]
             if self._is_expired(existing):
                 del self._sessions[session_id]
             else:
+                if existing.product_id != product_id:
+                    existing = Session(
+                        id=session_id,
+                        product_id=product_id,
+                        product_name=product_name,
+                    )
+                    self._sessions[session_id] = existing
                 existing.touch()
                 return existing
         new_id = session_id or str(uuid.uuid4())
-        session = Session(id=new_id)
+        session = Session(id=new_id, product_id=product_id, product_name=product_name)
         self._sessions[new_id] = session
         return session
 

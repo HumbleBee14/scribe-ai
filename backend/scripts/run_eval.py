@@ -19,7 +19,7 @@ from app.session.manager import Session
 EVAL_PATH = (
     Path(__file__).resolve().parent.parent.parent
     / "data"
-    / "document-packs"
+    / "products"
     / "vulcan-omnipro-220"
     / "eval_questions.yaml"
 )

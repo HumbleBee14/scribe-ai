@@ -27,13 +27,16 @@ export function DialogShell({
   const descriptionId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     const previousActive = document.activeElement as HTMLElement | null;
     containerRef.current?.focus();
     document.body.style.overflow = "hidden";
 
     const handler = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onCloseRef.current();
       if (event.key === "Tab" && containerRef.current) {
         const focusables = containerRef.current.querySelectorAll<HTMLElement>(
           'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])'
@@ -59,7 +62,7 @@ export function DialogShell({
       document.body.style.overflow = "";
       previousActive?.focus();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div

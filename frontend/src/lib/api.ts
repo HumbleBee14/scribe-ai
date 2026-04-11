@@ -8,12 +8,53 @@ export function buildBackendUrl(path: string): string {
   return `${BACKEND_URL}${normalizedPath}`;
 }
 
-export function getManualPageImageUrl(page: number): string {
-  return buildBackendUrl(`/assets/images/page_${String(page).padStart(2, "0")}.png`);
+export function getManualPageImageUrl(
+  productId: string,
+  page: number,
+  sourceId = "default"
+): string {
+  return buildBackendUrl(
+    `/api/products/${productId}/assets/pages/${sourceId}/page_${String(page).padStart(2, "0")}.png`
+  );
+}
+
+export interface ProductSourceSummary {
+  id: string;
+  type: string;
+  label: string;
+  pages?: number | null;
+}
+
+export interface ProductSummary {
+  id: string;
+  name: string;
+  description: string;
+  manufacturer?: string | null;
+  item_number?: string | null;
+  logo_url?: string | null;
+  domain: string;
+  categories: string[];
+  status: string;
+  seeded: boolean;
+  primary_source_id?: string | null;
+  document_count: number;
+  max_documents: number;
+  sources: ProductSourceSummary[];
+  processes: string[];
+  voltages: string[];
+  quick_actions: Array<{ label: string; message: string }>;
+  ingestion: {
+    status: string;
+    stage: string;
+    progress: number;
+    message: string;
+    error?: string | null;
+  };
 }
 
 export interface ChatRequestPayload {
   session_id: string | null;
+  product_id: string;
   message: string;
   images?: Array<{ media_type: string; data: string }>;
 }
@@ -81,4 +122,153 @@ export async function getSession(
   } catch {
     return null;
   }
+}
+
+export async function fetchProducts(): Promise<{
+  products: ProductSummary[];
+  default_product_id: string;
+}> {
+  const res = await fetch(buildBackendUrl("/api/products"));
+  if (!res.ok) {
+    throw new Error(`Products API error: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchProduct(productId: string): Promise<ProductSummary> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}`));
+  if (!res.ok) {
+    throw new Error(`Product API error: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function deleteProduct(productId: string): Promise<void> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}`), { method: "DELETE" });
+  if (!res.ok) {
+    throw new Error(`Delete product failed: ${res.status} ${res.statusText}`);
+  }
+}
+
+export async function updateProduct(productId: string, updates: { description?: string; categories?: string[] }): Promise<ProductSummary> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    throw new Error(`Update product failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function createProduct(name: string, description: string, categories: string[] = []): Promise<ProductSummary> {
+  const res = await fetch(buildBackendUrl("/api/products"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, description, categories }),
+  });
+  if (!res.ok) {
+    throw new Error(`Create product failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function uploadProductDocuments(
+  productId: string,
+  files: File[],
+  sourceType = "manual"
+): Promise<ProductSummary> {
+  const form = new FormData();
+  form.append("source_type", sourceType);
+  for (const file of files) form.append("files", file);
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}/documents`), {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    throw new Error(`Upload failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function replaceProductDocument(
+  productId: string,
+  sourceId: string,
+  file: File,
+  sourceType = "manual"
+): Promise<ProductSummary> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("source_type", sourceType);
+  const res = await fetch(
+    buildBackendUrl(`/api/products/${productId}/documents/${sourceId}/replace`),
+    {
+      method: "POST",
+      body: form,
+    }
+  );
+  if (!res.ok) {
+    throw new Error(`Replace failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function deleteProductDocument(
+  productId: string,
+  sourceId: string
+): Promise<ProductSummary> {
+  const res = await fetch(
+    buildBackendUrl(`/api/products/${productId}/documents/${sourceId}`),
+    { method: "DELETE" }
+  );
+  if (!res.ok) {
+    throw new Error(`Delete failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function uploadProductLogo(
+  productId: string,
+  file: File
+): Promise<ProductSummary> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}/logo`), {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    throw new Error(`Logo upload failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function startProductIngestion(productId: string): Promise<{
+  status: string;
+  stage: string;
+  progress: number;
+  message: string;
+}> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}/ingest`), {
+    method: "POST",
+  });
+  if (!res.ok) {
+    throw new Error(`Start ingestion failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function getProductIngestionStatus(productId: string): Promise<{
+  status: string;
+  stage: string;
+  progress: number;
+  message: string;
+  error?: string | null;
+}> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}/ingest/status`));
+  if (!res.ok) {
+    throw new Error(`Status API failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
 }

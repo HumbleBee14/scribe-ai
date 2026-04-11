@@ -6,9 +6,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SPECS_PATH = REPO_ROOT / "backend" / "app" / "knowledge" / "data" / "specs.json"
-PACK_PATH = REPO_ROOT / "data" / "document-packs" / "vulcan-omnipro-220" / "pack.yaml"
+PACK_PATH = REPO_ROOT / "data" / "products" / "vulcan-omnipro-220" / "pack.yaml"
 EVALS_PATH = (
-    REPO_ROOT / "data" / "document-packs" / "vulcan-omnipro-220" / "eval_questions.yaml"
+    REPO_ROOT / "data" / "products" / "vulcan-omnipro-220" / "eval_questions.yaml"
 )
 
 

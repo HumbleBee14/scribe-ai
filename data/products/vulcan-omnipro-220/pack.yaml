@@ -1,0 +1,16 @@
+id: vulcan-omnipro-220
+product_name: Vulcan OmniPro 220
+description: Multiprocess welding system (MIG, Flux-Cored, TIG, Stick) with dual voltage
+  input (120V/240V) and LCD synergic controls
+domain: generic
+status: draft
+sources: []
+quick_actions:
+- label: Summarize manual
+  message: Give me a concise overview of this product manual and what topics it covers.
+- label: Find setup steps
+  message: Walk me through the main setup steps from this manual.
+- label: Show a diagram
+  message: Show me the most relevant diagram or visual reference from this manual.
+- label: Search a feature
+  message: Help me find the section in this manual that explains a key feature.

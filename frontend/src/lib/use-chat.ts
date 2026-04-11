@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { streamChat } from "./api";
-import { listConversations, saveConversation } from "./history";
+import { getMessageStorageKey, listConversations, saveConversation } from "./history";
 import type {
   ArtifactEvent,
   ChatMessage,
@@ -19,11 +19,10 @@ function nextId(): string {
 }
 
 const REQUEST_TIMEOUT_MS = 90_000; // 90 seconds
-const MESSAGES_STORAGE_PREFIX = "prox_msgs_";
 
-function loadMessages(conversationId: string): ChatMessage[] {
+function loadMessages(productId: string, conversationId: string): ChatMessage[] {
   try {
-    const raw = localStorage.getItem(MESSAGES_STORAGE_PREFIX + conversationId);
+    const raw = localStorage.getItem(getMessageStorageKey(productId, conversationId));
     if (!raw) return [];
     const messages = JSON.parse(raw) as ChatMessage[];
     // Clean up: ensure no message is stuck in streaming state,
@@ -43,7 +42,7 @@ function loadMessages(conversationId: string): ChatMessage[] {
 
 const MAX_STORED_BYTES = 512 * 1024; // 512KB per conversation
 
-function persistMessages(conversationId: string, messages: ChatMessage[]): void {
+function persistMessages(productId: string, conversationId: string, messages: ChatMessage[]): void {
   // Strip only uploaded image base64 (user-uploaded photos, too large)
   // Everything else — artifacts, pageImages (URLs not base64), safetyWarnings — is kept
   const cleaned = messages.map((m) => ({
@@ -59,7 +58,7 @@ function persistMessages(conversationId: string, messages: ChatMessage[]): void 
     const trimmed = cleaned.slice(-20);
     const trimmedJson = JSON.stringify(trimmed);
     try {
-      localStorage.setItem(MESSAGES_STORAGE_PREFIX + conversationId, trimmedJson);
+      localStorage.setItem(getMessageStorageKey(productId, conversationId), trimmedJson);
     } catch (e) {
       console.warn("[useChat] Could not persist messages:", e);
     }
@@ -67,13 +66,13 @@ function persistMessages(conversationId: string, messages: ChatMessage[]): void 
   }
 
   try {
-    localStorage.setItem(MESSAGES_STORAGE_PREFIX + conversationId, json);
+    localStorage.setItem(getMessageStorageKey(productId, conversationId), json);
   } catch (e) {
     console.warn("[useChat] Could not persist messages (storage full?):", e);
     // Try trimming to last 10 messages as fallback
     try {
       localStorage.setItem(
-        MESSAGES_STORAGE_PREFIX + conversationId,
+        getMessageStorageKey(productId, conversationId),
         JSON.stringify(cleaned.slice(-10))
       );
     } catch {
@@ -93,9 +92,9 @@ function resolvePendingToolCalls(msg: ChatMessage): ChatMessage {
   };
 }
 
-export function useChat(conversationId: string) {
+export function useChat(productId: string, conversationId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
-    loadMessages(conversationId)
+    loadMessages(productId, conversationId)
   );
   const [isStreaming, setIsStreaming] = useState(false);
   const [session, setSession] = useState<SessionState | null>(null);
@@ -104,12 +103,12 @@ export function useChat(conversationId: string) {
 
   // When conversationId changes (history navigation), reload messages
   useEffect(() => {
-    const loaded = loadMessages(conversationId);
+    const loaded = loadMessages(productId, conversationId);
     setMessages(loaded);
     prevCountRef.current = loaded.length; // Don't treat loaded messages as "new"
     sessionIdRef.current = conversationId;
     setSession(null);
-  }, [conversationId]);
+  }, [conversationId, productId]);
 
   // Track message count to detect actual new messages vs. loading from storage
   const prevCountRef = useRef<number>(0);
@@ -120,7 +119,7 @@ export function useChat(conversationId: string) {
     if (messages.length === 0) return;
     if (persistRef.current) clearTimeout(persistRef.current);
     persistRef.current = setTimeout(() => {
-      persistMessages(conversationId, messages);
+      persistMessages(productId, conversationId, messages);
 
       // Only update conversation summary when message count actually increased
       // (not when loading from storage on conversation switch)
@@ -131,9 +130,10 @@ export function useChat(conversationId: string) {
         const firstUser = messages.find((m) => m.role === "user");
         if (firstUser) {
           // Preserve existing createdAt if conversation already exists
-          const existing = listConversations().find((c) => c.id === conversationId);
-          saveConversation({
+          const existing = listConversations(productId).find((c) => c.id === conversationId);
+          saveConversation(productId, {
             id: conversationId,
+            productId,
             title: firstUser.content.slice(0, 60) || "Image conversation",
             createdAt: existing?.createdAt ?? Date.now(),
             updatedAt: Date.now(),
@@ -145,7 +145,7 @@ export function useChat(conversationId: string) {
     return () => {
       if (persistRef.current) clearTimeout(persistRef.current);
     };
-  }, [messages, conversationId]);
+  }, [messages, conversationId, productId]);
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
@@ -186,6 +186,7 @@ export function useChat(conversationId: string) {
       try {
         const payload = {
           session_id: sessionIdRef.current,
+          product_id: productId,
           message: text,
           images: images?.map((img) => ({
             media_type: img.mediaType,
@@ -198,6 +199,8 @@ export function useChat(conversationId: string) {
             const sessionData = data as SessionUpdateEvent["data"];
             setSession({
               id: sessionData.id,
+              productId: sessionData.product_id,
+              productName: sessionData.product_name,
               currentProcess: sessionData.current_process,
               currentVoltage: sessionData.current_voltage,
               currentMaterial: sessionData.current_material,
@@ -329,7 +332,7 @@ export function useChat(conversationId: string) {
         setIsStreaming(false);
       }
     },
-    []
+    [productId]
   );
 
   const clearMessages = useCallback(() => {

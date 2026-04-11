@@ -8,6 +8,7 @@ import type { ArtifactEvent, SelectedSourcePage, SessionState } from "@/types/ev
 interface MobileContextPanelProps {
   open: boolean;
   onClose: () => void;
+  productId: string;
   session: SessionState | null;
   selectedSource: SelectedSourcePage | null;
   artifacts: ArtifactEvent["data"][];
@@ -16,6 +17,7 @@ interface MobileContextPanelProps {
 export function MobileContextPanel({
   open,
   onClose,
+  productId,
   session,
   selectedSource,
   artifacts,
@@ -31,7 +33,11 @@ export function MobileContextPanel({
       contentClassName="flex-1 overflow-auto p-4 space-y-6 bg-gray-50 dark:bg-neutral-950"
     >
       <SessionSidebar session={session} />
-      <SourceViewer selectedSource={selectedSource} artifacts={artifacts} />
+      <SourceViewer
+        productId={productId}
+        selectedSource={selectedSource}
+        artifacts={artifacts}
+      />
     </DialogShell>
   );
 }

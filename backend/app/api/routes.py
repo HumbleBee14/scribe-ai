@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from app.packs.registry import get_product_registry
+
 router = APIRouter()
 
 
@@ -13,9 +15,21 @@ def health() -> dict[str, str]:
 @router.get("/api/config")
 def get_config() -> dict[str, object]:
     """Return non-sensitive config for frontend."""
+    runtime = get_product_registry().require_product(None)
+    products = [
+        {
+            "id": product.id,
+            "name": product.product_name,
+            "status": product.status,
+            "domain": product.domain,
+        }
+        for product in get_product_registry().list_products()
+    ]
     return {
-        "product": "Vulcan OmniPro 220",
-        "item_number": "57812",
-        "processes": ["mig", "flux_cored", "tig", "stick"],
-        "voltages": ["120v", "240v"],
+        "product": runtime.product_name,
+        "product_id": runtime.id,
+        "item_number": runtime.manifest.item_number,
+        "processes": runtime.processes,
+        "voltages": runtime.voltages,
+        "products": products,
     }
