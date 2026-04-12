@@ -403,12 +403,12 @@ def mark_preseeded_sources_as_done(products_dir: Path) -> None:
     """
     conn = _get_conn()
 
-    # Get all sources marked as pending
+    # Get all sources that are NOT done (pending, processing, failed, etc.)
     rows = conn.execute(
-        "SELECT product_id, source_id FROM sources WHERE processing_status = 'pending'"
+        "SELECT product_id, source_id, processing_status FROM sources WHERE processing_status != 'done'"
     ).fetchall()
 
-    logger.info(f"[PRESEEDED] Found {len(rows)} pending sources to check")
+    logger.info(f"[PRESEEDED] Found {len(rows)} non-done sources to check")
 
     updated_products = set()
 
@@ -421,7 +421,8 @@ def mark_preseeded_sources_as_done(products_dir: Path) -> None:
         pages_exist = pages_dir.exists()
         png_files = list(pages_dir.glob("*.png")) if pages_exist else []
 
-        logger.info(f"[PRESEEDED] {product_id}/{source_id}: pages_dir={pages_exist}, png_count={len(png_files)}")
+        current_status = row["processing_status"]
+        logger.info(f"[PRESEEDED] {product_id}/{source_id} (status={current_status}): pages_dir={pages_exist}, png_count={len(png_files)}")
 
         if pages_exist and png_files:
             logger.info(f"[PRESEEDED] Marking as done: {product_id}/{source_id} ({len(png_files)} pages)")
