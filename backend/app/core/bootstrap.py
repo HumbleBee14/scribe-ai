@@ -5,7 +5,6 @@ All initialization logic lives here so main.py stays clean.
 from __future__ import annotations
 
 import logging
-import threading
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -32,36 +31,12 @@ def _setup_logging() -> None:
     logging.getLogger().addHandler(file_handler)
 
 
-def _process_pending_products() -> None:
-    """Check for any pending source documents across all products and process them."""
-    from app.core import database as db
-    from app.ingest.jobs import process_single_document
-
-    for product in db.list_products():
-        pending = db.get_pending_sources(product["id"])
-        if pending:
-            db.update_product_status(product["id"], "processing")
-            for source in pending:
-                logger.info("Auto-processing: %s/%s", product["id"], source["source_id"])
-                try:
-                    process_single_document(product["id"], source["source_id"])
-                except Exception:
-                    logger.exception("Auto-processing failed: %s/%s", product["id"], source["source_id"])
-
-
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     _setup_logging()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     PRODUCTS_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
-    # Mark pre-seeded sources (from .db in git) as done if assets exist
-    from app.core.database import mark_preseeded_sources_as_done
-    logger.info(f"[STARTUP] Checking for pre-seeded sources in {PRODUCTS_DIR}")
-    mark_preseeded_sources_as_done(PRODUCTS_DIR)
-    logger.info("[STARTUP] Pre-seeded source check complete")
-    # Check for unprocessed products in a background thread
-    threading.Thread(target=_process_pending_products, daemon=True).start()
     yield
 
 

@@ -86,52 +86,45 @@ export function ProductWorkspace({ initialProductId }: Props) {
 
   useEffect(() => {
     if (!activeProduct) return;
-    if (!["processing", "draft"].includes(activeProduct.ingestion.status)) return;
+    // Only poll when actively processing (user just uploaded a document).
+    // The initial product status comes from fetchProducts() -- no separate poll needed.
+    if (activeProduct.ingestion.status !== "processing") return;
 
     let retries = 0;
-    const maxRetries = 12; // ~30 seconds max (12 * 2.5s)
-    let isMounted = true;
+    const maxRetries = 40; // ~2 minutes max for real ingestion
+    let stopped = false;
 
     const poll = async () => {
+      if (stopped) return;
       try {
         const status = await getProductIngestionStatus(activeProduct.id);
-        if (!isMounted) return;
+        if (stopped) return;
 
         setProducts((prev) =>
           prev.map((product) =>
             product.id === activeProduct.id
-              ? {
-                  ...product,
-                  status: status.status,
-                  ingestion: status,
-                }
+              ? { ...product, status: status.status, ingestion: status }
               : product
           )
         );
 
-        // Stop polling once we get a terminal status
-        if (!["processing", "draft"].includes(status.status)) {
-          return;
-        }
-
-        retries++;
-        if (retries >= maxRetries) {
-          return; // Stop after max retries
-        }
-
-        setTimeout(poll, 2500);
+        // Stop polling once ingestion finishes (ready, failed, draft)
+        if (status.status !== "processing") return;
       } catch {
-        // Keep last known state, retry up to max
-        retries++;
-        if (retries < maxRetries && isMounted) {
-          setTimeout(poll, 2500);
-        }
+        // network error -- keep trying
+      }
+
+      retries++;
+      if (retries < maxRetries) {
+        setTimeout(poll, 3000);
       }
     };
 
-    poll();
+    // First check after a short delay (give backend time to start processing)
+    const timer = setTimeout(poll, 1500);
     return () => {
-      isMounted = false;
+      stopped = true;
+      clearTimeout(timer);
     };
   }, [activeProduct]);
 

@@ -394,59 +394,6 @@ def update_product_status(product_id: str, status: str) -> None:
     update_product(product_id, status=status)
 
 
-def mark_preseeded_sources_as_done(products_dir: Path) -> None:
-    """Mark sources as 'done' if their asset files already exist on disk.
-
-    This handles the case where a .db file is committed to git with pre-processed data.
-    On first startup, sources are marked 'pending' by default, but if pages/ exist,
-    the source has already been processed and should not be re-ingested.
-    """
-    conn = _get_conn()
-
-    # Get all sources that are NOT done (pending, processing, failed, etc.)
-    rows = conn.execute(
-        "SELECT product_id, source_id, processing_status FROM sources WHERE processing_status != 'done'"
-    ).fetchall()
-
-    logger.info(f"[PRESEEDED] Found {len(rows)} non-done sources to check")
-
-    updated_products = set()
-
-    for row in rows:
-        product_id = row["product_id"]
-        source_id = row["source_id"]
-
-        # Check if pages directory exists for this source
-        pages_dir = products_dir / product_id / "assets" / "pages" / source_id
-        pages_exist = pages_dir.exists()
-        png_files = list(pages_dir.glob("*.png")) if pages_exist else []
-
-        current_status = row["processing_status"]
-        logger.info(f"[PRESEEDED] {product_id}/{source_id} (status={current_status}): pages_dir={pages_exist}, png_count={len(png_files)}")
-
-        if pages_exist and png_files:
-            logger.info(f"[PRESEEDED] Marking as done: {product_id}/{source_id} ({len(png_files)} pages)")
-            conn.execute(
-                """UPDATE sources SET processing_status = 'done'
-                   WHERE product_id = ? AND source_id = ?""",
-                (product_id, source_id),
-            )
-            updated_products.add(product_id)
-
-    conn.commit()
-    logger.info(f"[PRESEEDED] Committed updates for {len(updated_products)} products")
-
-    # Update product status to 'ready' if all its sources are now done
-    for product_id in updated_products:
-        if all_sources_processed(product_id):
-            logger.info(f"[PRESEEDED] Setting product to ready: {product_id}")
-            conn.execute(
-                "UPDATE products SET status = 'ready' WHERE id = ?",
-                (product_id,),
-            )
-    conn.commit()
-    logger.info(f"[PRESEEDED] Pre-seeded source marking complete")
-
 
 # ---------------------------------------------------------------------------
 # Page Analysis (OCR results from Claude Vision)
