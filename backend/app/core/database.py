@@ -408,6 +408,8 @@ def mark_preseeded_sources_as_done(products_dir: Path) -> None:
         "SELECT product_id, source_id FROM sources WHERE processing_status = 'pending'"
     ).fetchall()
 
+    logger.info(f"[PRESEEDED] Found {len(rows)} pending sources to check")
+
     updated_products = set()
 
     for row in rows:
@@ -416,8 +418,13 @@ def mark_preseeded_sources_as_done(products_dir: Path) -> None:
 
         # Check if pages directory exists for this source
         pages_dir = products_dir / product_id / "assets" / "pages" / source_id
-        if pages_dir.exists() and list(pages_dir.glob("*.png")):
-            logger.info(f"Marking pre-seeded source as done: {product_id}/{source_id}")
+        pages_exist = pages_dir.exists()
+        png_files = list(pages_dir.glob("*.png")) if pages_exist else []
+
+        logger.info(f"[PRESEEDED] {product_id}/{source_id}: pages_dir={pages_exist}, png_count={len(png_files)}")
+
+        if pages_exist and png_files:
+            logger.info(f"[PRESEEDED] Marking as done: {product_id}/{source_id} ({len(png_files)} pages)")
             conn.execute(
                 """UPDATE sources SET processing_status = 'done'
                    WHERE product_id = ? AND source_id = ?""",
@@ -426,16 +433,18 @@ def mark_preseeded_sources_as_done(products_dir: Path) -> None:
             updated_products.add(product_id)
 
     conn.commit()
+    logger.info(f"[PRESEEDED] Committed updates for {len(updated_products)} products")
 
     # Update product status to 'ready' if all its sources are now done
     for product_id in updated_products:
         if all_sources_processed(product_id):
-            logger.info(f"Setting product to ready: {product_id}")
+            logger.info(f"[PRESEEDED] Setting product to ready: {product_id}")
             conn.execute(
                 "UPDATE products SET status = 'ready' WHERE id = ?",
                 (product_id,),
             )
     conn.commit()
+    logger.info(f"[PRESEEDED] Pre-seeded source marking complete")
 
 
 # ---------------------------------------------------------------------------

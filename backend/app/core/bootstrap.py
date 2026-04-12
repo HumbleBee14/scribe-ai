@@ -57,7 +57,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_db()
     # Mark pre-seeded sources (from .db in git) as done if assets exist
     from app.core.database import mark_preseeded_sources_as_done
+    logger.info(f"[STARTUP] Checking for pre-seeded sources in {PRODUCTS_DIR}")
     mark_preseeded_sources_as_done(PRODUCTS_DIR)
+    logger.info("[STARTUP] Pre-seeded source check complete")
     # Check for unprocessed products in a background thread
     threading.Thread(target=_process_pending_products, daemon=True).start()
     yield
