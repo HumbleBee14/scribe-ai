@@ -126,6 +126,9 @@ class AgentOrchestrator:
                 "Read",  # Built-in: agent can read files including page images for vision
                 f"mcp__{MCP_SERVER_NAME}__*",  # All our custom tools
             ],
+            # Pass API key explicitly so the bundled CLI uses pay-per-token API
+            # instead of falling back to the Claude.ai web account (which has usage caps).
+            env={"ANTHROPIC_API_KEY": settings.anthropic_api_key} if settings.anthropic_api_key else {},
         )
 
         if session.sdk_session_id:

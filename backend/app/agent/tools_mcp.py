@@ -21,12 +21,34 @@ MCP_SERVER_NAME = "product-knowledge"
 def _mcp_result(data: Any) -> dict[str, Any]:
     """Wrap tool output in MCP CallToolResult format.
 
-    SDK expects: {"content": [{"type": "text", "text": "..."}]}
+    For image results (data has '_image_b64' key): returns multimodal content
+    with the image inline so the agent sees it directly without needing Read.
+    For all other results: returns JSON text.
     """
+    if isinstance(data, dict) and data.get("_image_b64"):
+        # Multimodal response: image + metadata text
+        caption = (
+            f"Page {data.get('page')} of '{data.get('source_id')}'. "
+            f"Display URL for frontend: {data.get('url', 'N/A')}. "
+            "The page image is shown directly above — analyze it for visual details."
+        )
+        return {
+            "content": [
+                {
+                    "type": "image",
+                    "data": data["_image_b64"],
+                    "mimeType": data.get("_mime_type", "image/png"),
+                },
+                {"type": "text", "text": caption},
+            ]
+        }
+
+    # Text-only response: filter internal _ keys, serialize as JSON
     if isinstance(data, str):
         text = data
     elif isinstance(data, dict):
-        text = json.dumps(data, indent=2, default=str)
+        clean = {k: v for k, v in data.items() if not k.startswith("_")}
+        text = json.dumps(clean, indent=2, default=str)
     else:
         text = str(data)
     return {"content": [{"type": "text", "text": text}]}

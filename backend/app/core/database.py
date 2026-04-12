@@ -394,6 +394,50 @@ def update_product_status(product_id: str, status: str) -> None:
     update_product(product_id, status=status)
 
 
+def mark_preseeded_sources_as_done(products_dir: Path) -> None:
+    """Mark sources as 'done' if their asset files already exist on disk.
+
+    This handles the case where a .db file is committed to git with pre-processed data.
+    On first startup, sources are marked 'pending' by default, but if pages/ exist,
+    the source has already been processed and should not be re-ingested.
+    """
+    conn = _get_conn()
+
+    # Get all sources marked as pending
+    rows = conn.execute(
+        "SELECT product_id, source_id FROM sources WHERE processing_status = 'pending'"
+    ).fetchall()
+
+    updated_products = set()
+
+    for row in rows:
+        product_id = row["product_id"]
+        source_id = row["source_id"]
+
+        # Check if pages directory exists for this source
+        pages_dir = products_dir / product_id / "assets" / "pages" / source_id
+        if pages_dir.exists() and list(pages_dir.glob("*.png")):
+            logger.info(f"Marking pre-seeded source as done: {product_id}/{source_id}")
+            conn.execute(
+                """UPDATE sources SET processing_status = 'done'
+                   WHERE product_id = ? AND source_id = ?""",
+                (product_id, source_id),
+            )
+            updated_products.add(product_id)
+
+    conn.commit()
+
+    # Update product status to 'ready' if all its sources are now done
+    for product_id in updated_products:
+        if all_sources_processed(product_id):
+            logger.info(f"Setting product to ready: {product_id}")
+            conn.execute(
+                "UPDATE products SET status = 'ready' WHERE id = ?",
+                (product_id,),
+            )
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Page Analysis (OCR results from Claude Vision)
 # ---------------------------------------------------------------------------

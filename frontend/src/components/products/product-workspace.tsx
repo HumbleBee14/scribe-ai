@@ -87,9 +87,16 @@ export function ProductWorkspace({ initialProductId }: Props) {
   useEffect(() => {
     if (!activeProduct) return;
     if (!["processing", "draft"].includes(activeProduct.ingestion.status)) return;
-    const interval = window.setInterval(async () => {
+
+    let retries = 0;
+    const maxRetries = 12; // ~30 seconds max (12 * 2.5s)
+    let isMounted = true;
+
+    const poll = async () => {
       try {
         const status = await getProductIngestionStatus(activeProduct.id);
+        if (!isMounted) return;
+
         setProducts((prev) =>
           prev.map((product) =>
             product.id === activeProduct.id
@@ -101,11 +108,31 @@ export function ProductWorkspace({ initialProductId }: Props) {
               : product
           )
         );
+
+        // Stop polling once we get a terminal status
+        if (!["processing", "draft"].includes(status.status)) {
+          return;
+        }
+
+        retries++;
+        if (retries >= maxRetries) {
+          return; // Stop after max retries
+        }
+
+        setTimeout(poll, 2500);
       } catch {
-        // Keep last known state.
+        // Keep last known state, retry up to max
+        retries++;
+        if (retries < maxRetries && isMounted) {
+          setTimeout(poll, 2500);
+        }
       }
-    }, 2500);
-    return () => window.clearInterval(interval);
+    };
+
+    poll();
+    return () => {
+      isMounted = false;
+    };
   }, [activeProduct]);
 
   useEffect(() => {

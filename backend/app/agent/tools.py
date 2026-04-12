@@ -6,6 +6,7 @@ adapters later.
 """
 from __future__ import annotations
 
+import base64
 import json
 import logging
 
@@ -25,9 +26,12 @@ TOOL_DEFINITIONS: list[dict] = [
         "name": "search_manual",
         "description": (
             "Search across all product manual pages using keywords and semantic similarity. "
-            "Returns page summaries ranked by relevance. "
-            "Use this FIRST to find which pages contain information about a topic. "
-            "Example queries: 'specifications', 'setup steps', 'troubleshooting', 'safety warnings'."
+            "Returns pages ranked by relevance, each with a summary, relevance score, "
+            "match_type (keyword+semantic / keyword-only / semantic-only), and matched keywords. "
+            "Use match_type to decide next step: 'keyword+semantic' = high confidence, read text; "
+            "'semantic-only' = paraphrase match, consider get_page_image for visual verification. "
+            "Optionally filter to a single source document with source_id. "
+            "Use this FIRST to find which pages contain information about a topic."
         ),
         "input_schema": {
             "type": "object",
@@ -35,6 +39,14 @@ TOOL_DEFINITIONS: list[dict] = [
                 "query": {
                     "type": "string",
                     "description": "Search query. Use specific terms the manual would contain.",
+                },
+                "source_id": {
+                    "type": "string",
+                    "description": (
+                        "Optional: restrict search to a single source document "
+                        "(e.g. 'owner-manual', 'quick-start-guide'). "
+                        "Omit to search across all sources."
+                    ),
                 },
             },
             "required": ["query"],
@@ -69,11 +81,13 @@ TOOL_DEFINITIONS: list[dict] = [
     {
         "name": "get_page_image",
         "description": (
-            "Get a manual page image. Returns a file_path and a display URL. "
-            "The image is shown to the user inline in the chat. "
-            "If YOU need to visually analyze the page (circuit diagrams, schematics, wiring layouts, "
-            "parts diagrams), use the Read tool on the returned file_path to see the image yourself. "
-            "Example: get_page_image('owner-manual', 7) to show the specifications page."
+            "Get a manual page as an image. The page image is delivered DIRECTLY into your context "
+            "AND shown to the user in the chat — you do NOT need to call Read separately. "
+            "Use this when visual content matters: specification tables, diagrams, charts, "
+            "labeled illustrations, panel/layout photos, or any page where the visual layout "
+            "carries meaning that plain text cannot capture accurately. "
+            "Especially useful when generating precise artifacts (SVG, HTML tables, Mermaid diagrams) "
+            "where exact numbers, labels, or spatial relationships must be correct."
         ),
         "input_schema": {
             "type": "object",
@@ -84,7 +98,7 @@ TOOL_DEFINITIONS: list[dict] = [
                 },
                 "page": {
                     "type": "integer",
-                    "description": "Page number to display to the user",
+                    "description": "Page number to retrieve",
                 },
             },
             "required": ["source_id", "page"],
@@ -226,9 +240,22 @@ def execute_tool(name: str, params: dict) -> dict:
 
     if name == "search_manual":
         query = params.get("query", "")
+        source_filter = params.get("source_id")  # optional: search within one document
         results = _hybrid_search(product_id, query, limit=8)
+        if source_filter:
+            results = [r for r in results if r["source_id"] == source_filter]
         if not results:
             return _log_result(name, {"results": [], "message": "No matching pages found."})
+
+        def _match_type(r: dict) -> str:
+            fts = r.get("fts_hit", False)
+            vec = r.get("vec_distance") is not None
+            if fts and vec:
+                return "keyword+semantic"
+            if fts:
+                return "keyword-only"
+            return "semantic-only"
+
         return _log_result(name, {
             "results": [
                 {
@@ -236,6 +263,8 @@ def execute_tool(name: str, params: dict) -> dict:
                     "page": r["page"],
                     "summary": r["summary"],
                     "score": round(r.get("score", 0), 3),
+                    "match_type": _match_type(r),
+                    "keywords": r.get("keywords", ""),
                 }
                 for r in results
             ]
@@ -261,15 +290,23 @@ def execute_tool(name: str, params: dict) -> dict:
     if name == "get_page_image":
         source_id = params.get("source_id", "")
         page = params.get("page", 1)
-        # Return file path so agent can Read it for vision analysis,
-        # plus URL for frontend display
         image_path = runtime.pages_dir / source_id / f"page_{page:02d}.png"
+        url = f"/api/products/{product_id}/assets/pages/{source_id}/page_{page:02d}.png"
+        # Encode image as base64 so MCP can deliver it inline to the agent.
+        # The agent sees the image DIRECTLY — no Read tool needed.
+        image_b64: str | None = None
+        if image_path.exists():
+            try:
+                image_b64 = base64.b64encode(image_path.read_bytes()).decode()
+            except Exception as exc:
+                logger.warning("Could not encode page image %s: %s", image_path, exc)
         return _log_result(name, {
             "page": page,
             "source_id": source_id,
-            "file_path": str(image_path),
-            "url": f"/api/products/{product_id}/assets/pages/{source_id}/page_{page:02d}.png",
-            "note": "Use the Read tool on file_path if you need to visually analyze this page (diagrams, schematics, circuits). The image will also be shown to the user in the chat.",
+            "url": url,
+            # Internal keys (prefixed _) consumed by _mcp_result, not sent as text
+            "_image_b64": image_b64,
+            "_mime_type": "image/png",
         })
 
     if name == "clarify_question":

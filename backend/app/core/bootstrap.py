@@ -55,6 +55,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     PRODUCTS_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
+    # Mark pre-seeded sources (from .db in git) as done if assets exist
+    from app.core.database import mark_preseeded_sources_as_done
+    mark_preseeded_sources_as_done(PRODUCTS_DIR)
     # Check for unprocessed products in a background thread
     threading.Thread(target=_process_pending_products, daemon=True).start()
     yield
