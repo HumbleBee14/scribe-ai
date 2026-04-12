@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Home, LibraryBig, Loader2, PanelLeftOpen } from "lucide-react";
+import { Home, LibraryBig, Loader2, PanelLeftOpen, RefreshCw } from "lucide-react";
 import {
   BACKEND_URL,
   fetchProducts,
-  getProductIngestionStatus,
   ProductSummary,
 } from "@/lib/api";
 import { listConversations } from "@/lib/history";
@@ -84,49 +83,15 @@ export function ProductWorkspace({ initialProductId }: Props) {
     setConversationId(existing?.id ?? crypto.randomUUID());
   }, [activeProduct]);
 
-  useEffect(() => {
-    if (!activeProduct) return;
-    // Only poll when actively processing (user just uploaded a document).
-    // The initial product status comes from fetchProducts() -- no separate poll needed.
-    if (activeProduct.ingestion.status !== "processing") return;
-
-    let retries = 0;
-    const maxRetries = 40; // ~2 minutes max for real ingestion
-    let stopped = false;
-
-    const poll = async () => {
-      if (stopped) return;
-      try {
-        const status = await getProductIngestionStatus(activeProduct.id);
-        if (stopped) return;
-
-        setProducts((prev) =>
-          prev.map((product) =>
-            product.id === activeProduct.id
-              ? { ...product, status: status.status, ingestion: status }
-              : product
-          )
-        );
-
-        // Stop polling once ingestion finishes (ready, failed, draft)
-        if (status.status !== "processing") return;
-      } catch {
-        // network error -- keep trying
-      }
-
-      retries++;
-      if (retries < maxRetries) {
-        setTimeout(poll, 3000);
-      }
-    };
-
-    // First check after a short delay (give backend time to start processing)
-    const timer = setTimeout(poll, 1500);
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-    };
-  }, [activeProduct]);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshStatus = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadProducts();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadProducts]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: messages.length > 1 ? "smooth" : "auto" });
@@ -277,16 +242,22 @@ export function ProductWorkspace({ initialProductId }: Props) {
         </header>
 
         {activeProduct.ingestion.status !== "ready" && (
-          <div className="shrink-0 border-b border-orange-200 bg-orange-50 px-5 py-2 text-xs text-orange-700 dark:border-orange-900/40 dark:bg-orange-950/30 dark:text-orange-200">
-            {activeProduct.ingestion.status === "processing" ? (
-              <span className="inline-flex items-center gap-2">
-                <Loader2 suppressHydrationWarning className="h-3.5 w-3.5 animate-spin" />
-                {activeProduct.ingestion.message || "Manual ingestion is running in the background."}
-              </span>
-            ) : (
-              activeProduct.ingestion.message ||
-              "Upload one or more documents, then start chatting once ingestion is ready."
-            )}
+          <div className="flex shrink-0 items-center justify-between border-b border-orange-200 bg-orange-50 px-5 py-2 text-xs text-orange-700 dark:border-orange-900/40 dark:bg-orange-950/30 dark:text-orange-200">
+            <span>
+              {activeProduct.ingestion.status === "processing"
+                ? activeProduct.ingestion.message || "Documents are being processed."
+                : activeProduct.ingestion.message || "Upload documents to get started."}
+            </span>
+            <button
+              type="button"
+              onClick={() => void refreshStatus()}
+              disabled={refreshing}
+              className="ml-3 inline-flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium text-orange-600 transition-colors hover:bg-orange-100 disabled:opacity-50 dark:text-orange-300 dark:hover:bg-orange-900/40"
+              title="Refresh status"
+            >
+              <RefreshCw suppressHydrationWarning className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
           </div>
         )}
 
@@ -349,6 +320,15 @@ export function ProductWorkspace({ initialProductId }: Props) {
                   ·
                 </span>
                 <span className="font-medium text-gray-600 dark:text-neutral-400">{ingestionLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => void refreshStatus()}
+                  disabled={refreshing}
+                  className="ml-1.5 inline-flex rounded p-0.5 text-gray-400 transition-colors hover:text-orange-500 disabled:opacity-50 dark:text-neutral-500 dark:hover:text-orange-400"
+                  title="Refresh status"
+                >
+                  <RefreshCw suppressHydrationWarning className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
+                </button>
               </p>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
