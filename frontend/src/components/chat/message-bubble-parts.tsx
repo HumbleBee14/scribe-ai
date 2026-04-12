@@ -104,7 +104,7 @@ function extractFollowUps(text: string): string[] {
   return questions;
 }
 
-function stripFollowupsBlock(text: string): string {
+export function stripFollowupsBlock(text: string): string {
   return text.replace(FOLLOWUPS_BLOCK_REGEX, "").trim();
 }
 
@@ -387,6 +387,9 @@ export function TextBubble({
     );
   }
 
+  const displayText = stripFollowupsBlock(text);
+  if (!displayText.trim()) return null;
+
   return (
     <div className="chat-prose text-gray-900 dark:text-neutral-100">
       <ReactMarkdown
@@ -400,7 +403,7 @@ export function TextBubble({
           em: ({ children }) => <em>{linkifyPageRefs(children, onSelectSourcePage)}</em>,
         }}
       >
-        {text}
+        {displayText}
       </ReactMarkdown>
     </div>
   );
