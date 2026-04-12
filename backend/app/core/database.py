@@ -214,16 +214,19 @@ def get_product(product_id: str) -> dict[str, Any] | None:
     product["categories"] = get_categories(product_id)
     product["sources"] = get_sources(product_id)
     product["quick_actions"] = get_quick_actions(product_id)
-    # Derive ingestion status from source processing statuses
+    # Derive ingestion status from source processing statuses.
+    # "ready" = all sources done. Anything else = not ready yet.
     sources = product["sources"]
     if not sources:
-        product["ingestion"] = {"status": product["status"], "message": ""}
+        product["ingestion"] = {"status": "draft", "message": "No documents uploaded."}
     elif all(s.get("processing_status") == "done" for s in sources):
         product["ingestion"] = {"status": "ready", "message": "All documents processed."}
-    elif any(s.get("processing_status") == "pending" for s in sources):
-        product["ingestion"] = {"status": "processing", "message": "Processing documents..."}
     else:
-        product["ingestion"] = {"status": product["status"], "message": ""}
+        not_done = [s for s in sources if s.get("processing_status") != "done"]
+        product["ingestion"] = {
+            "status": "processing",
+            "message": f"{len(not_done)} document(s) still processing.",
+        }
     return product
 
 

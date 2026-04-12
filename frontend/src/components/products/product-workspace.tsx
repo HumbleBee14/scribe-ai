@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Home, LibraryBig, Loader2, PanelLeftOpen, RefreshCw } from "lucide-react";
+import { AlertTriangle, Home, LibraryBig, Loader2, PanelLeftOpen, RefreshCw } from "lucide-react";
 import {
   BACKEND_URL,
   fetchProducts,
+  getProductIngestionStatus,
   ProductSummary,
 } from "@/lib/api";
 import { listConversations } from "@/lib/history";
@@ -93,15 +94,60 @@ export function ProductWorkspace({ initialProductId }: Props) {
     }
   }, [loadProducts]);
 
+  // Track whether all docs are processed for the current product.
+  // Resets on product switch; once true, stays true (no more checks).
+  const [docsReady, setDocsReady] = useState(false);
+  const [processingWarning, setProcessingWarning] = useState(false);
+
+  useEffect(() => {
+    if (!activeProduct) return;
+    const ready = activeProduct.ingestion.status === "ready";
+    setDocsReady(ready);
+    setProcessingWarning(false);
+  }, [activeProduct?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync docsReady when product data refreshes (e.g. after manual refresh)
+  useEffect(() => {
+    if (activeProduct?.ingestion.status === "ready") {
+      setDocsReady(true);
+    }
+  }, [activeProduct?.ingestion.status]);
+
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: messages.length > 1 ? "smooth" : "auto" });
   }, [messages]);
 
+  // Auto-dismiss warning after 5 seconds
+  useEffect(() => {
+    if (!processingWarning) return;
+    const timer = setTimeout(() => setProcessingWarning(false), 5000);
+    return () => clearTimeout(timer);
+  }, [processingWarning]);
+
   const handleSend = useCallback(
-    (text: string, images?: Array<{ mediaType: string; data: string }>) => {
+    async (text: string, images?: Array<{ mediaType: string; data: string }>) => {
+      // If docs not ready, check once before sending
+      if (!docsReady) {
+        try {
+          const status = await getProductIngestionStatus(activeProductId);
+          if (status.status === "ready") {
+            setDocsReady(true);
+            // Also update product list state
+            setProducts((prev) =>
+              prev.map((p) =>
+                p.id === activeProductId ? { ...p, status: status.status, ingestion: status } : p
+              )
+            );
+          } else {
+            setProcessingWarning(true);
+          }
+        } catch {
+          // Network error -- let the message through anyway
+        }
+      }
       sendMessage(text, images);
     },
-    [sendMessage]
+    [sendMessage, docsReady, activeProductId]
   );
 
   const handleNew = useCallback(() => {
@@ -119,8 +165,7 @@ export function ProductWorkspace({ initialProductId }: Props) {
     [conversationId]
   );
 
-  const chatDisabled =
-    isStreaming || !activeProduct || activeProduct.ingestion.status !== "ready";
+  const chatDisabled = isStreaming || !activeProduct;
 
   if (!activeProduct) {
     if (productsLoadError) {
@@ -291,6 +336,19 @@ export function ProductWorkspace({ initialProductId }: Props) {
             </div>
 
             <div className="shrink-0 border-t border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900">
+              {processingWarning && (
+                <div className="mx-auto flex max-w-6xl items-center gap-2 border-b border-amber-200 bg-amber-50 px-6 py-2 text-xs text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+                  <AlertTriangle suppressHydrationWarning className="h-3.5 w-3.5 shrink-0" />
+                  <span>Some documents are still processing. Answers may not cover those docs yet.</span>
+                  <button
+                    type="button"
+                    onClick={() => setProcessingWarning(false)}
+                    className="ml-auto text-[10px] font-medium text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-200"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
               <div className="mx-auto max-w-6xl">
                 <ChatInput
                   onSend={handleSend}
