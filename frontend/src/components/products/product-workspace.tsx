@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Home, LibraryBig, Loader2, PanelLeftOpen, RefreshCw } from "lucide-react";
 import {
   BACKEND_URL,
+  buildBackendUrl,
   fetchProducts,
   getProductIngestionStatus,
   ProductSummary,
@@ -365,15 +366,29 @@ export function ProductWorkspace({ initialProductId }: Props) {
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500">
                 Product workspace
               </p>
-              <h2 className="mt-1 text-sm font-semibold leading-snug text-gray-900 dark:text-neutral-100">
-                {activeProduct.name}
-              </h2>
+              <div className="mt-1.5 flex items-center gap-2.5">
+                {activeProduct.logo_url && (
+                  <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md border border-gray-200/90 bg-gray-50 dark:border-neutral-600 dark:bg-neutral-800/90">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- backend asset URL */}
+                    <img
+                      src={buildBackendUrl(activeProduct.logo_url)}
+                      alt=""
+                      className="h-full w-full object-contain p-0.5"
+                    />
+                  </div>
+                )}
+                <h2 className="text-sm font-semibold leading-snug text-gray-900 dark:text-neutral-100">
+                  {activeProduct.name}
+                </h2>
+              </div>
               <p className="mt-2 text-xs leading-relaxed text-gray-600 dark:text-neutral-400">
                 {activeProduct.description || "Local-first multimodal manual assistant"}
               </p>
-              <p className="mt-2.5 text-[11px] text-gray-500 dark:text-neutral-500">
-                {activeProduct.document_count}{" "}
-                {activeProduct.document_count === 1 ? "manual" : "manuals"}
+              <div className="mt-2.5 flex items-center text-[11px] text-gray-500 dark:text-neutral-500">
+                <span>
+                  {activeProduct.document_count}{" "}
+                  {activeProduct.document_count === 1 ? "manual" : "manuals"}
+                </span>
                 <span className="mx-2 text-gray-300 dark:text-neutral-600" aria-hidden>
                   ·
                 </span>
@@ -382,12 +397,12 @@ export function ProductWorkspace({ initialProductId }: Props) {
                   type="button"
                   onClick={() => void refreshStatus()}
                   disabled={refreshing}
-                  className="ml-1.5 inline-flex rounded p-0.5 text-gray-400 transition-colors hover:text-orange-500 disabled:opacity-50 dark:text-neutral-500 dark:hover:text-orange-400"
+                  className="ml-1.5 inline-flex items-center rounded p-0.5 text-gray-400 transition-colors hover:text-orange-500 disabled:opacity-50 dark:text-neutral-500 dark:hover:text-orange-400"
                   title="Refresh status"
                 >
                   <RefreshCw suppressHydrationWarning className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
                 </button>
-              </p>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
               <SourceViewer
