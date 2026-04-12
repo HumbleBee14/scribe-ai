@@ -114,6 +114,10 @@ export interface ChatMessage {
   isStreaming?: boolean;
   /** Ordered content blocks for interleaved rendering. */
   blocks?: ContentBlock[];
+  /** Follow-up suggestions from the agent. */
+  followUps?: string[];
+  /** Paths to user-uploaded images (stored on disk, not base64). */
+  uploadedImagePaths?: string[];
 }
 
 export interface SessionState {

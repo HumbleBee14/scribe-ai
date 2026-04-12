@@ -418,3 +418,12 @@ def get_logo_asset(product_id: str) -> FileResponse:
     if not path.exists():
         raise HTTPException(status_code=404, detail="Logo not found")
     return FileResponse(path)
+
+
+@router.get("/{product_id}/assets/uploads/{filename}")
+def get_upload_asset(product_id: str, filename: str) -> FileResponse:
+    safe_name = Path(filename).name
+    path = PRODUCTS_DIR / product_id / "uploads" / safe_name
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Upload not found")
+    return FileResponse(path)

@@ -3,14 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageSquare, PanelLeftClose, Pencil, PenSquare, Trash2 } from "lucide-react";
 import {
-  ConversationSummary,
-  deleteConversationMessages,
-  deleteConversation,
-  listConversations,
-  saveConversation,
-} from "@/lib/history";
+  listConversations as listConversationsAPI,
+  deleteConversationAPI,
+  updateConversationTitle,
+  type ConversationSummary,
+} from "@/lib/api";
 
-/** Tailwind width classes for the history rail — keep in sync with the workspace header brand column. */
+/** Tailwind width classes for the history rail. */
 export const HISTORY_SIDEBAR_WIDTH_CLASS = "w-60 shrink-0";
 
 interface Props {
@@ -30,29 +29,27 @@ export function HistorySidebar({
 }: Props) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
 
-  const reload = useCallback(() => {
-    setConversations(listConversations(productId));
+  const reload = useCallback(async () => {
+    const convs = await listConversationsAPI(productId);
+    setConversations(convs);
   }, [productId]);
 
+  // Reload on mount and when activeId changes (new conversation created)
   useEffect(() => {
-    const timeoutId = window.setTimeout(reload, 0);
-    return () => window.clearTimeout(timeoutId);
+    void reload();
   }, [activeId, reload]);
 
-  useEffect(() => {
-    window.addEventListener("storage", reload);
-    const interval = setInterval(reload, 3000);
-    return () => {
-      window.removeEventListener("storage", reload);
-      clearInterval(interval);
-    };
-  }, [reload]);
-
-  const handleDelete = (id: string) => {
-    deleteConversation(productId, id);
-    deleteConversationMessages(productId, id);
-    setConversations(listConversations(productId));
+  const handleDelete = async (id: string) => {
+    await deleteConversationAPI(id);
+    setConversations((prev) => prev.filter((c) => c.id !== id));
     if (id === activeId) onNew();
+  };
+
+  const handleRename = async (id: string, title: string) => {
+    await updateConversationTitle(id, title);
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, title } : c))
+    );
   };
 
   return (
@@ -96,9 +93,8 @@ export function HistorySidebar({
               conv={conv}
               isActive={conv.id === activeId}
               onSelect={() => onSelect(conv.id)}
-              onDelete={() => handleDelete(conv.id)}
-              onRename={reload}
-              productId={productId}
+              onDelete={() => void handleDelete(conv.id)}
+              onRename={(title) => void handleRename(conv.id, title)}
             />
           ))
         )}
@@ -113,14 +109,12 @@ function ConversationRow({
   onSelect,
   onDelete,
   onRename,
-  productId,
 }: {
   conv: ConversationSummary;
   isActive: boolean;
   onSelect: () => void;
   onDelete: () => void;
-  onRename: () => void;
-  productId: string;
+  onRename: (title: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -143,12 +137,14 @@ function ConversationRow({
         <EditableTitle
           conv={conv}
           editing={editing}
-          onRename={onRename}
+          onRename={(title) => {
+            onRename(title);
+            setEditing(false);
+          }}
           onEditDone={() => setEditing(false)}
-          productId={productId}
         />
         <div className="text-[10px] text-gray-400 dark:text-neutral-400">
-          {conv.messageCount} {conv.messageCount === 1 ? "message" : "messages"}
+          {conv.message_count} {conv.message_count === 1 ? "message" : "messages"}
         </div>
       </div>
       {!editing && (
@@ -183,13 +179,11 @@ function EditableTitle({
   editing,
   onRename,
   onEditDone,
-  productId,
 }: {
   conv: ConversationSummary;
   editing: boolean;
-  onRename: () => void;
+  onRename: (title: string) => void;
   onEditDone: () => void;
-  productId: string;
 }) {
   const [value, setValue] = useState(conv.title);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -208,10 +202,10 @@ function EditableTitle({
   const save = () => {
     const trimmed = value.trim();
     if (trimmed && trimmed !== conv.title) {
-      saveConversation(productId, { ...conv, title: trimmed });
-      onRename();
+      onRename(trimmed);
+    } else {
+      onEditDone();
     }
-    onEditDone();
   };
 
   if (editing) {

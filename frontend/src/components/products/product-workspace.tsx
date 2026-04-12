@@ -10,7 +10,7 @@ import {
   getProductIngestionStatus,
   ProductSummary,
 } from "@/lib/api";
-import { listConversations } from "@/lib/history";
+import { useRouter } from "next/navigation";
 import { useChat } from "@/lib/use-chat";
 import { extractArtifactsFromMessages } from "@/lib/artifacts";
 import { ChatInput } from "@/components/chat/chat-input";
@@ -24,12 +24,14 @@ import type { SelectedSourcePage } from "@/types/events";
 
 interface Props {
   initialProductId: string;
+  initialConversationId?: string;
 }
 
-export function ProductWorkspace({ initialProductId }: Props) {
+export function ProductWorkspace({ initialProductId, initialConversationId }: Props) {
+  const router = useRouter();
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [activeProductId, setActiveProductId] = useState(initialProductId);
-  const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
+  const [conversationId, setConversationId] = useState<string | null>(initialConversationId ?? null);
   const [selectedSource, setSelectedSource] = useState<SelectedSourcePage | null>(null);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
@@ -42,8 +44,16 @@ export function ProductWorkspace({ initialProductId }: Props) {
     [products, activeProductId]
   );
 
-  const { messages, isStreaming, sendMessage, stopStreaming, clearMessages } =
+  const { messages, isStreaming, newConversationId, sendMessage, stopStreaming, clearMessages } =
     useChat(activeProductId, conversationId);
+
+  // When backend creates a new conversation, update URL (one-time)
+  useEffect(() => {
+    if (newConversationId) {
+      setConversationId(newConversationId);
+      window.history.replaceState(null, "", `/products/${activeProductId}/chat/${newConversationId}`);
+    }
+  }, [newConversationId, activeProductId]);
 
   const artifacts = useMemo(() => extractArtifactsFromMessages(messages), [messages]);
 
@@ -80,9 +90,7 @@ export function ProductWorkspace({ initialProductId }: Props) {
 
   useEffect(() => {
     if (!activeProduct) return;
-    const existing = listConversations(activeProduct.id)[0];
     setSelectedSource(null);
-    setConversationId(existing?.id ?? crypto.randomUUID());
   }, [activeProduct]);
 
   const [refreshing, setRefreshing] = useState(false);
@@ -154,16 +162,18 @@ export function ProductWorkspace({ initialProductId }: Props) {
   const handleNew = useCallback(() => {
     clearMessages();
     setSelectedSource(null);
-    setConversationId(crypto.randomUUID());
-  }, [clearMessages]);
+    setConversationId(null);
+    window.history.pushState(null, "", `/products/${activeProductId}`);
+  }, [clearMessages, activeProductId]);
 
   const handleSelectHistory = useCallback(
     (id: string) => {
       if (id === conversationId) return;
       setSelectedSource(null);
       setConversationId(id);
+      window.history.pushState(null, "", `/products/${activeProductId}/chat/${id}`);
     },
-    [conversationId]
+    [conversationId, activeProductId]
   );
 
   const chatDisabled = isStreaming || !activeProduct;
@@ -220,7 +230,7 @@ export function ProductWorkspace({ initialProductId }: Props) {
       {historyOpen && (
         <HistorySidebar
           productId={activeProduct.id}
-          activeId={conversationId}
+          activeId={conversationId ?? ""}
           onSelect={handleSelectHistory}
           onNew={handleNew}
           onCollapse={() => setHistoryOpen(false)}

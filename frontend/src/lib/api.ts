@@ -54,7 +54,8 @@ export interface ProductSummary {
 }
 
 export interface ChatRequestPayload {
-  session_id: string | null;
+  conversation_id?: string;
+  session_id?: string | null;
   product_id: string;
   message: string;
   images?: Array<{ media_type: string; data: string }>;
@@ -272,4 +273,62 @@ export async function getProductIngestionStatus(productId: string): Promise<{
     throw new Error(`Status API failed: ${res.status} ${res.statusText}`);
   }
   return res.json();
+}
+
+
+// ---------------------------------------------------------------------------
+// Conversations
+// ---------------------------------------------------------------------------
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DBMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ConversationDetail {
+  id: string;
+  product_id: string;
+  title: string;
+  messages: DBMessage[];
+}
+
+export async function listConversations(productId: string): Promise<ConversationSummary[]> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}/conversations`));
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.conversations;
+}
+
+export async function createConversation(productId: string): Promise<{ id: string }> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}/conversations`), { method: "POST" });
+  if (!res.ok) throw new Error("Failed to create conversation");
+  return res.json();
+}
+
+export async function getConversation(conversationId: string): Promise<ConversationDetail | null> {
+  const res = await fetch(buildBackendUrl(`/api/conversations/${conversationId}`));
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function updateConversationTitle(conversationId: string, title: string): Promise<void> {
+  await fetch(buildBackendUrl(`/api/conversations/${conversationId}`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+}
+
+export async function deleteConversationAPI(conversationId: string): Promise<void> {
+  await fetch(buildBackendUrl(`/api/conversations/${conversationId}`), { method: "DELETE" });
 }

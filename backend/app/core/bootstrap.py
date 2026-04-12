@@ -60,9 +60,11 @@ def create_app() -> FastAPI:
     from app.api.routes import router as api_router
     from app.api.products import router as products_router
     from app.api.chat import router as chat_router
+    from app.api.conversations import router as conversations_router
 
     app.include_router(api_router)
     app.include_router(products_router)
     app.include_router(chat_router)
+    app.include_router(conversations_router)
 
     return app

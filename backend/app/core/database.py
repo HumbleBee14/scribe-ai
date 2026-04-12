@@ -8,9 +8,12 @@ Database handles: product metadata, sources, categories, ingestion status.
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
+import secrets
 import sqlite3
+import string
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -131,6 +134,28 @@ def init_db() -> None:
             level INTEGER DEFAULT 1,
             FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS conversations (
+            id TEXT PRIMARY KEY,
+            product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            title TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_conversations_product
+            ON conversations(product_id, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_messages_conversation
+            ON messages(conversation_id, id);
     """)
 
     # FTS5 virtual table for full-text search across page content
@@ -719,3 +744,81 @@ def delete_toc_for_source(product_id: str, source_id: str) -> None:
         (product_id, source_id),
     )
     conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Conversations
+# ---------------------------------------------------------------------------
+
+def _nanoid(size: int = 10) -> str:
+    alphabet = string.ascii_lowercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(size))
+
+
+def create_conversation(product_id: str, title: str = "") -> dict[str, Any]:
+    conn = _get_conn()
+    conv_id = _nanoid()
+    now = _now()
+    conn.execute(
+        "INSERT INTO conversations (id, product_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        (conv_id, product_id, title, now, now),
+    )
+    conn.commit()
+    return {"id": conv_id, "product_id": product_id, "title": title, "created_at": now, "updated_at": now}
+
+
+def get_conversation(conversation_id: str) -> dict[str, Any] | None:
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+    if row is None:
+        return None
+    conv = dict(row)
+    msgs = conn.execute(
+        "SELECT id, role, content, created_at FROM messages WHERE conversation_id = ? ORDER BY id",
+        (conversation_id,),
+    ).fetchall()
+    conv["messages"] = [
+        {"id": m["id"], "role": m["role"], "content": json.loads(m["content"]), "created_at": m["created_at"]}
+        for m in msgs
+    ]
+    return conv
+
+
+def list_conversations(product_id: str) -> list[dict[str, Any]]:
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT c.id, c.title, c.created_at, c.updated_at,
+                  (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id) as message_count
+           FROM conversations c WHERE c.product_id = ?
+           ORDER BY c.updated_at DESC""",
+        (product_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_message(conversation_id: str, role: str, content: dict) -> dict[str, Any]:
+    conn = _get_conn()
+    now = _now()
+    cursor = conn.execute(
+        "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+        (conversation_id, role, json.dumps(content), now),
+    )
+    conn.execute(
+        "UPDATE conversations SET updated_at = ? WHERE id = ?",
+        (now, conversation_id),
+    )
+    conn.commit()
+    return {"id": cursor.lastrowid, "role": role, "content": content, "created_at": now}
+
+
+def update_conversation_title(conversation_id: str, title: str) -> None:
+    conn = _get_conn()
+    conn.execute("UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?", (title, _now(), conversation_id))
+    conn.commit()
+
+
+def delete_conversation(conversation_id: str) -> bool:
+    conn = _get_conn()
+    cursor = conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+    conn.commit()
+    return cursor.rowcount > 0
