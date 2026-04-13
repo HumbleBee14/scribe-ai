@@ -198,10 +198,11 @@ def _build_static_prompt(product_id: str) -> str:
     if product is None:
         return DEFAULT_SYSTEM_PROMPT
 
-    custom = product.get("custom_prompt", "").strip()
-    base_prompt = custom if custom else DEFAULT_SYSTEM_PROMPT
+    parts = [DEFAULT_SYSTEM_PROMPT]
 
-    parts = [base_prompt]
+    custom = product.get("custom_prompt", "").strip()
+    if custom:
+        parts.append(f"\n## Additional Rules\n{custom}")
 
     parts.append(f"\n## Product: {product['name']}")
     if product.get("description"):
