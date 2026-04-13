@@ -335,6 +335,24 @@ export async function deleteConversationAPI(conversationId: string): Promise<voi
 
 
 // ---------------------------------------------------------------------------
+// Source page listing (for manual preview)
+// ---------------------------------------------------------------------------
+
+export interface SourcePages {
+  source_id: string;
+  label: string;
+  page_count: number;
+  pages: Array<{ page: number; url: string }>;
+}
+
+export async function fetchSourcePages(productId: string, sourceId: string): Promise<SourcePages> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}/sources/${sourceId}/pages`));
+  if (!res.ok) throw new Error(`Failed to fetch pages: ${res.status}`);
+  return res.json();
+}
+
+
+// ---------------------------------------------------------------------------
 // Memories (per-product preferences)
 // ---------------------------------------------------------------------------
 

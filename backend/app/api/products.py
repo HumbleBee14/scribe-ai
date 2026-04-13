@@ -379,7 +379,64 @@ def get_ingestion_status_api(product_id: str) -> dict[str, object]:
 
 
 # ---------------------------------------------------------------------------
-# Static asset serving (pages, figures, logo)
+# Manual pages listing (for preview dialog)
+# ---------------------------------------------------------------------------
+
+@router.get("/{product_id}/sources/{source_id}/pages")
+def list_source_pages(product_id: str, source_id: str) -> dict[str, object]:
+    """List all rendered page image URLs for a source document."""
+    row = db.get_product(product_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Unknown product: {product_id}")
+
+    source = next((s for s in row["sources"] if s["source_id"] == source_id), None)
+    if source is None:
+        raise HTTPException(status_code=404, detail=f"Unknown source: {source_id}")
+
+    page_count = source.get("pages") or 0
+    pages = []
+    for p in range(1, page_count + 1):
+        pages.append({
+            "page": p,
+            "url": f"/api/products/{product_id}/assets/pages/{source_id}/page_{p:02d}.png",
+        })
+
+    return {
+        "source_id": source_id,
+        "label": source.get("label") or source_id,
+        "page_count": page_count,
+        "pages": pages,
+    }
+
+
+# ---------------------------------------------------------------------------
+# PDF file serving (for manual preview)
+# ---------------------------------------------------------------------------
+
+@router.get("/{product_id}/sources/{source_id}/pdf")
+def get_source_pdf(product_id: str, source_id: str) -> FileResponse:
+    """Serve the original PDF file for browser preview."""
+    row = db.get_product(product_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Unknown product: {product_id}")
+
+    source = next((s for s in row["sources"] if s["source_id"] == source_id), None)
+    if source is None:
+        raise HTTPException(status_code=404, detail=f"Unknown source: {source_id}")
+
+    pdf_path = PRODUCTS_DIR / product_id / source["path"]
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="PDF file not found")
+
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Static asset serving (pages, logo)
 # ---------------------------------------------------------------------------
 
 @router.get("/{product_id}/assets/pages/{source_id}/{filename}")
@@ -405,7 +462,8 @@ def get_page_asset(product_id: str, source_id: str, filename: str) -> FileRespon
                     break
     if not path.exists():
         raise HTTPException(status_code=404, detail="Page image not found")
-    return FileResponse(path)
+    # Cache page images in browser - they never change once rendered
+    return FileResponse(path, headers={"Cache-Control": "public, max-age=86400"})
 
 
 
