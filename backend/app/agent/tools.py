@@ -127,6 +127,32 @@ TOOL_DEFINITIONS: list[dict] = [
             "required": ["question"],
         },
     },
+    {
+        "name": "update_memory",
+        "description": (
+            "Add or delete a user preference/context from memory for this product. "
+            "Memories persist across conversations and are injected into every future chat. "
+            "Use 'add' when the user mentions their setup, preferences, or recurring context. "
+            "Use 'delete' when the user says to forget something or remove a preference. "
+            "Examples to add: 'Uses 240V input', 'Primarily does MIG on mild steel', 'Beginner welder'. "
+            "Maximum 5 memories per product. Keep each memory brief (under 100 chars)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["add", "delete"],
+                    "description": "Whether to add or delete a memory.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "For 'add': the preference to remember. For 'delete': the text of the memory to remove (exact or partial match).",
+                },
+            },
+            "required": ["action", "content"],
+        },
+    },
 ]
 
 
@@ -314,5 +340,28 @@ def execute_tool(name: str, params: dict) -> dict:
             "question": params.get("question", ""),
             "options": params.get("options"),
         })
+
+    if name == "update_memory":
+        action = params.get("action", "add")
+        content = params.get("content", "").strip()
+        if not content:
+            return _log_result(name, {"error": "Content cannot be empty"})
+
+        if action == "add":
+            result = db.add_memory(product_id, content, source="agent")
+            if result is None:
+                return _log_result(name, {"error": "Maximum 5 memories reached. Delete one first."})
+            return _log_result(name, {"saved": True, "content": content})
+
+        if action == "delete":
+            # Find matching memory by partial content match
+            memories = db.get_memories(product_id)
+            matched = next((m for m in memories if content.lower() in m["content"].lower()), None)
+            if matched is None:
+                return _log_result(name, {"error": f"No memory matching '{content}' found."})
+            db.delete_memory(matched["id"])
+            return _log_result(name, {"deleted": True, "content": matched["content"]})
+
+        return _log_result(name, {"error": f"Unknown action: {action}. Use 'add' or 'delete'."})
 
     return _log_result(name, {"error": f"Unknown tool: {name}"})

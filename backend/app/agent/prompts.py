@@ -42,6 +42,12 @@ IMPORTANT styling rules for ALL artifacts:
 Keep artifacts concise when possible, but expand as needed for complex diagrams, calculators, or flowcharts. Completeness matters more than brevity.
 
 5. Optionally suggest follow-up questions at the end in a ```followups block.
+
+## Memory (update_memory tool)
+You have an update_memory tool that persists information across conversations for this product.
+Use it to ADD when the user reveals personal context that would help you give better answers in future conversations -- their experience level, typical use case, equipment setup, project goals, or any preference that shapes how they interact with this product.
+Use it to DELETE when the user asks to forget something or their situation changes.
+Do NOT save facts from the manual or trivial details. Only save user-specific context. Keep each memory short and factual.
 """
 
 
@@ -203,6 +209,15 @@ def _build_static_prompt(product_id: str) -> str:
     return result
 
 
+def _build_memories_section(product_id: str) -> str:
+    """Build the memories/preferences section for the system prompt."""
+    memories = db.get_memories(product_id)
+    if not memories:
+        return ""
+    items = "\n".join(f"- {m['content']}" for m in memories)
+    return f"\n## User Preferences & Memory\n{items}\n\nUse these to personalize your answers. Use the update_memory tool to add or remove preferences when relevant."
+
+
 def build_system_prompt(
     product_id: str,
     user_message: str = "",
@@ -210,16 +225,20 @@ def build_system_prompt(
     """Build the complete system prompt for the agent.
 
     Static part (base + product + doc map) is cached per product.
-    Dynamic part (search context) is computed per message.
+    Dynamic parts (memories, search context) are computed per message.
     """
     static_part = _build_static_prompt(product_id)
 
-    if not user_message:
-        return static_part
+    # Memories: dynamic, can change mid-session
+    memories_section = _build_memories_section(product_id)
 
-    # Dynamic: hybrid search context for this specific query
-    search_context = build_initial_search_context(product_id, user_message)
-    if search_context:
-        return f"{static_part}\n\n{search_context}"
+    parts = [static_part]
+    if memories_section:
+        parts.append(memories_section)
 
-    return static_part
+    if user_message:
+        search_context = build_initial_search_context(product_id, user_message)
+        if search_context:
+            parts.append(f"\n{search_context}")
+
+    return "\n".join(parts)

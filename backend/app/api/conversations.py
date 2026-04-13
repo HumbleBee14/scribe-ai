@@ -51,3 +51,33 @@ def delete_conversation_api(conversation_id: str) -> dict:
     if not db.delete_conversation(conversation_id):
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
+# Memories (per-product preferences)
+# ---------------------------------------------------------------------------
+
+class AddMemoryRequest(BaseModel):
+    content: str
+
+
+@router.get("/api/products/{product_id}/memories")
+def list_memories_api(product_id: str) -> dict:
+    return {"memories": db.get_memories(product_id), "max": db.MAX_MEMORIES_PER_PRODUCT}
+
+
+@router.post("/api/products/{product_id}/memories")
+def add_memory_api(product_id: str, req: AddMemoryRequest) -> dict:
+    if not req.content.strip():
+        raise HTTPException(status_code=400, detail="Content cannot be empty")
+    result = db.add_memory(product_id, req.content.strip(), source="user")
+    if result is None:
+        raise HTTPException(status_code=400, detail=f"Maximum {db.MAX_MEMORIES_PER_PRODUCT} memories reached")
+    return result
+
+
+@router.delete("/api/memories/{memory_id}")
+def delete_memory_api(memory_id: int) -> dict:
+    if not db.delete_memory(memory_id):
+        raise HTTPException(status_code=404, detail="Memory not found")
+    return {"deleted": True}

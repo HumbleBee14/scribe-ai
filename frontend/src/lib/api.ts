@@ -332,3 +332,35 @@ export async function updateConversationTitle(conversationId: string, title: str
 export async function deleteConversationAPI(conversationId: string): Promise<void> {
   await fetch(buildBackendUrl(`/api/conversations/${conversationId}`), { method: "DELETE" });
 }
+
+
+// ---------------------------------------------------------------------------
+// Memories (per-product preferences)
+// ---------------------------------------------------------------------------
+
+export interface Memory {
+  id: number;
+  content: string;
+  source: string;
+  created_at: string;
+}
+
+export async function listMemories(productId: string): Promise<{ memories: Memory[]; max: number }> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}/memories`));
+  if (!res.ok) return { memories: [], max: 5 };
+  return res.json();
+}
+
+export async function addMemory(productId: string, content: string): Promise<Memory | null> {
+  const res = await fetch(buildBackendUrl(`/api/products/${productId}/memories`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function deleteMemory(memoryId: number): Promise<void> {
+  await fetch(buildBackendUrl(`/api/memories/${memoryId}`), { method: "DELETE" });
+}
