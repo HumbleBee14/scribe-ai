@@ -198,7 +198,7 @@ class AgentOrchestrator:
             max_turns=MAX_AGENT_TURNS,
             permission_mode="bypassPermissions",
             include_partial_messages=True,
-            thinking={"type": "adaptive"},
+            thinking={"type": "adaptive"} if settings.enable_thinking else None,
             allowed_tools=[
                 "Read",
                 "WebSearch",

@@ -34,6 +34,7 @@ class Settings(BaseSettings):
 
     # Feature flags
     enable_cross_encoder_rerank: bool = True
+    enable_thinking: bool = True
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),

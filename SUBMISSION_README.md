@@ -215,7 +215,9 @@ User query: "What's the duty cycle for MIG at 240V?"
 
 ### Phase 4: Agent Reasoning Loop
 
-The Claude Agent SDK manages the reasoning loop. The agent receives:
+The Claude Agent SDK manages the reasoning loop with **adaptive extended thinking** enabled. On complex questions, Claude reasons through its approach before responding -- which pages to check, how to cross-reference information, what tools to call. This thinking is streamed to the frontend and shown in a collapsible "Reasoning" section, giving users transparency into the agent's thought process. Simple questions skip thinking entirely (adaptive mode).
+
+The agent receives:
 
 1. **System prompt** with generic instructions
 2. **Product info** (name, description)
@@ -405,6 +407,7 @@ Plus built-in Agent SDK tools:
 
 - **Product dashboard** -- create, edit, delete product workspaces with categories, logo, and custom system prompt
 - **Real-time tool transparency** -- users see what the agent is doing as it works: "Searching manual...", "Read pages 7, 19, 23", "Loaded page 45", "Calculated: 175 * 0.30". Tool calls are collapsible with success/failure indicators
+- **Adaptive reasoning** -- on complex questions, the agent's extended thinking is streamed and shown in a collapsible "Reasoning" section. Users can expand it to see how the agent decided which pages to check and how it cross-referenced information
 - **Inline artifacts** -- HTML calculators, Mermaid flowcharts, SVG diagrams rendered in-chat with expand-to-fullscreen
 - **Manual preview** -- tabbed PDF viewer per document, scrollable, text-selectable, browser-cached
 - **Image upload** -- paste from clipboard, file picker, or mobile camera capture. Agent analyzes uploads with Vision and cross-references manual pages
