@@ -84,6 +84,8 @@ export function useChat(productId: string, conversationId: string | null) {
   // Use ref to avoid re-render loops between useChat and workspace
   const activeConvRef = useRef<string | null>(conversationId);
   const [newConversationId, setNewConversationId] = useState<string | null>(null);
+  // Track conversation IDs created in this session to skip DB reload for them
+  const createdInSessionRef = useRef<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
 
   // Load messages from DB when conversationId changes
@@ -94,6 +96,12 @@ export function useChat(productId: string, conversationId: string | null) {
 
     if (!conversationId) {
       setMessages([]);
+      return;
+    }
+
+    // Skip DB reload if this conversation was just created in this session
+    // (messages are already in state from the streaming response)
+    if (createdInSessionRef.current.has(conversationId)) {
       return;
     }
 
@@ -167,6 +175,7 @@ export function useChat(productId: string, conversationId: string | null) {
           if (event === "conversation_created") {
             const newId = (data as { conversation_id: string }).conversation_id;
             activeConvRef.current = newId;
+            createdInSessionRef.current.add(newId);
             setNewConversationId(newId);
             continue;
           }

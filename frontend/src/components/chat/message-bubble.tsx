@@ -60,7 +60,7 @@ export function MessageBubble({
       </div>
 
       {/* Content */}
-      <div className={`flex max-w-[85%] flex-col gap-2 ${isUser ? "items-end" : ""}`}>
+      <div className={`flex flex-col gap-2 ${isUser ? "max-w-[85%] items-end" : "max-w-[90%]"}`}>
         {/* Uploaded user images: compact inline row, click to expand */}
         {message.images && message.images.length > 0 && (
           <div className="flex flex-wrap gap-2">

@@ -9,23 +9,7 @@ interface Props {
 }
 
 // Common emoji to text replacements for Mermaid compatibility
-const EMOJI_MAP: Record<string, string> = {
-  "\u{1F534}": "(X)", // red circle
-  "\u{1F7E0}": "(!)", // orange circle
-  "\u{1F7E1}": "(!)", // yellow circle
-  "\u{1F7E2}": "(OK)", // green circle
-  "\u2705": "[OK]", // checkmark
-  "\u274C": "[X]", // cross
-  "\u26A0\uFE0F": "/!\\", // warning
-  "\u26A0": "/!\\", // warning (no variation)
-  "\u2B06": "^", // up arrow
-  "\u2B07": "v", // down arrow
-  "\u27A1": "->", // right arrow
-  "\u{1F525}": "*", // fire
-  "\u{1F6D1}": "STOP", // stop sign
-  "\u2714": "[OK]", // heavy check
-  "\u2716": "[X]", // heavy X
-};
+// No emoji stripping -- emojis are preserved via auto-quoting labels.
 
 /**
  * Fix multi-line node labels in Mermaid code.
@@ -120,55 +104,64 @@ function detectTruncation(): boolean {
  * - Replaces common emojis with text equivalents
  * - Wraps node labels containing special chars in quotes
  */
-function sanitizeMermaid(raw: string): string {
-  // The code arrives from JSON with \n as literal two-char sequences.
-  // We need to convert structural \n (between statements) to real newlines,
-  // and \n inside node labels to <br/>.
-  //
-  // Strategy: first convert ALL \n to real newlines, then fix multi-line nodes.
-  let code = raw.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+/**
+ * Auto-quote node labels that contain emoji characters.
+ * Mermaid requires quotes around labels with emojis.
+ * e.g. A([✅ Found]) -> A(["✅ Found"])
+ * Only quotes labels that actually contain emojis -- leaves everything else alone.
+ */
+/**
+ * Auto-quote unquoted node labels that contain emojis or escaped brackets.
+ * Already-quoted labels (with ") are left untouched.
+ * e.g. {arr\[mid\]} -> {"arr[mid]"}
+ * e.g. ([✅ Found]) -> (["✅ Found"])
+ * e.g. ["already quoted ✅"] -> unchanged
+ */
+function quoteLabels(code: string): string {
+  return code.split("\n").map(line => {
+    // Process each node definition on the line.
+    // Match: opening brackets + UNQUOTED content + closing brackets.
+    // The key: we skip already-quoted labels by checking for " right after open bracket.
+    return line.replace(
+      /(\(\[|\[|\(\(|\(|\{)([^"]*?)(\]\)|\]|\)\)|\)|\})/g,
+      (match, open: string, content: string, close: string) => {
+        // Check if content has emojis or escaped brackets
+        const hasEmoji = /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}]/u.test(content);
+        const hasEscBrackets = content.includes("\\[") || content.includes("\\]");
+        if (!hasEmoji && !hasEscBrackets) return match;
 
-  // If the code has no real newlines but has \n literals, it came as a single line
+        // Unescape \[ and \] since they'll be inside quotes now
+        let cleaned = content.replace(/\\(\[|\])/g, "$1");
+        cleaned = cleaned.replace(/"/g, "'");
+        return `${open}"${cleaned}"${close}`;
+      }
+    );
+  }).join("\n");
+}
+
+function sanitizeMermaid(raw: string): string {
+  let code = (raw || "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+
+  // Normalize \n
   if (!code.includes("\n") && code.includes("\\n")) {
     code = code.replace(/\\n/g, "\n");
   } else if (code.includes("\\n")) {
-    // Mixed: has both real newlines and \n literals.
-    // \n inside quotes or brackets = label break, convert to <br/>
-    // \n outside = structural, convert to real newline
     code = code.replace(/\\n/g, "\n");
   }
 
-  // Now fix multi-line node labels (real newlines inside brackets become <br/>)
+  // Fix multi-line node labels
   code = fixMultilineNodes(code);
 
-  // Replace known emojis with ASCII equivalents
-  for (const [emoji, replacement] of Object.entries(EMOJI_MAP)) {
-    code = code.replaceAll(emoji, replacement);
-  }
+  // Normalize common AI syntax mistakes
+  code = code.replace(/\[\[(\w)/g, "[($1");       // [[ -> [( subroutine confusion
+  code = code.replace(/\/!\\/g, "WARNING:");        // /!\ not valid
+  code = code.replace(/─{3,}/g, "---");            // box-drawing dashes
+  code = code.replace(/[""]/g, '"');               // smart quotes
+  code = code.replace(/['']/g, "'");               // smart single quotes
+  code = code.replace(/[\u200B-\u200D\uFEFF]/g, ""); // zero-width junk
 
-  // Only replace actual emoji (pictographic range), NOT symbols or box-drawing
-  code = code.replace(
-    /[\u{1F300}-\u{1F9FF}\u{1FA00}-\u{1FAFF}]/gu,
-    "*"
-  );
-
-  // Fix common Claude Mermaid syntax mistakes:
-
-  // CRITICAL: Replace literal newlines inside node brackets with <br/>
-  // Mermaid does NOT support multi-line text in [] {} () nodes.
-  // Claude frequently generates:
-  //   PORO[POROSITY
-  //   Holes/pits in bead]
-  // which must become:
-  //   PORO["POROSITY<br/>Holes/pits in bead"]
-  code = fixMultilineNodes(code);
-
-  // [[ inside node text (Mermaid interprets as subroutine shape)
-  code = code.replace(/\[\[(\w)/g, "[($1");
-  // /!\ warning symbol (not valid in Mermaid)
-  code = code.replace(/\/!\\/g, "WARNING:");
-  // Long box-drawing dashes that break parsing
-  code = code.replace(/─{3,}/g, "---");
+  // Auto-quote labels with special chars (emojis, parens, symbols)
+  code = quoteLabels(code);
 
   return code;
 }
@@ -201,8 +194,8 @@ export function MermaidViewer({ code, title }: Props) {
 
   const escaped = cleanCode
     .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/<(?!br\s*\/?>)/gi, "&lt;")
+    .replace(/(?<!<br\s*\/?)>/gi, "&gt;");
 
   // Simple approach: let SVG use viewBox for auto-scaling, overflow scroll for manual zoom
   const iframeHtml = `<!DOCTYPE html>
@@ -210,7 +203,7 @@ export function MermaidViewer({ code, title }: Props) {
 <head>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #0f172a; overflow: hidden; }
+  body { background: #fff; overflow: hidden; }
   #viewport {
     width: 100%; height: 100vh; overflow: hidden;
     cursor: grab; position: relative;
@@ -223,17 +216,21 @@ export function MermaidViewer({ code, title }: Props) {
     padding: 16px;
   }
   #diagram svg { width: 100%; height: auto; max-height: 95vh; }
+  /* Hide raw mermaid text until rendered */
+  .mermaid { visibility: hidden; position: absolute; }
   .error { color: #f87171; font: 13px system-ui; padding: 16px; }
   .error pre { margin-top: 8px; font-size: 11px; color: #9ca3af; white-space: pre-wrap; }
   .controls {
     position: fixed; bottom: 8px; right: 8px; display: flex; gap: 4px; z-index: 10;
   }
   .controls button {
-    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
-    color: #94a3b8; border-radius: 6px; width: 30px; height: 30px;
-    cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center;
+    background: #f3f4f6; border: 1px solid #d1d5db;
+    color: #374151; border-radius: 6px; width: 32px; height: 32px;
+    cursor: pointer; font-size: 15px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
   }
-  .controls button:hover { background: rgba(255,255,255,0.2); color: #fff; }
+  .controls button:hover { background: #e5e7eb; color: #111827; }
 </style>
 </head>
 <body>
@@ -249,18 +246,14 @@ export function MermaidViewer({ code, title }: Props) {
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs';
 
 mermaid.initialize({
-  startOnLoad: false, theme: 'dark',
-  themeVariables: {
-    primaryColor: '#f97316', primaryTextColor: '#fff', primaryBorderColor: '#f97316',
-    lineColor: '#94a3b8', secondaryColor: '#1e293b', tertiaryColor: '#334155',
-    background: '#0f172a', mainBkg: '#1e293b', nodeBorder: '#f97316', titleColor: '#fff',
-  },
+  startOnLoad: false, theme: 'default',
   fontFamily: 'system-ui, sans-serif', fontSize: 13, securityLevel: 'loose',
 });
 
 try {
   const el = document.querySelector('.mermaid');
-  const { svg } = await mermaid.render('mmd-render-target', el.textContent);
+  const raw = el.textContent;
+  const { svg } = await mermaid.render('mmd-render-target', raw);
   const container = document.getElementById('diagram');
   container.innerHTML = svg;
 

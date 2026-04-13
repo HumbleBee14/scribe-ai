@@ -295,7 +295,7 @@ function InlineArtifact({
 
   return (
     <>
-      <div className="relative group/art my-2 -mx-2">
+      <div className="relative group/art my-2">
         {renderArtifactByType(type, artifact.code, artifact.title)}
         <button
           type="button"

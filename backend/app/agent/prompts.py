@@ -8,7 +8,11 @@ Builds the system prompt with:
 """
 from __future__ import annotations
 
+import logging
+
 from app.core import database as db
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SYSTEM_PROMPT = """You are a product manual Q&A assistant. You help users understand their product by answering questions accurately using the uploaded manual documents.
 
@@ -28,7 +32,14 @@ DEFAULT_SYSTEM_PROMPT = """You are a product manual Q&A assistant. You help user
 CONTENT
 </artifact>
 
-Supported types: svg, mermaid, html (self-contained, dark-themed, mobile-responsive).
+Supported types: svg, mermaid, html (self-contained, mobile-responsive).
+IMPORTANT styling rules for ALL artifacts:
+- Use white/light backgrounds with dark text. Never use dark/black backgrounds.
+- For tables: white background, dark text (#111), light borders (#ddd), colored headers (blue/orange) with white text.
+- For SVG: white or light gray fill, dark strokes and labels.
+- For mermaid: use the 'default' theme, never 'dark'. CRITICAL: Always wrap node labels in double quotes if they contain special characters, brackets, emojis, or math symbols. Example: E{"arr[mid] == target?"} NOT E{arr\[mid\] == target?}. Mermaid does NOT support backslash escapes -- quotes are the only way to include special chars in labels. Use \n inside quoted labels for line breaks: B["line 1<br/>line 2"].
+- All text must be clearly readable -- high contrast always.
+Keep artifacts concise when possible, but expand as needed for complex diagrams, calculators, or flowcharts. Completeness matters more than brevity.
 
 5. Optionally suggest follow-up questions at the end in a ```followups block.
 """
@@ -60,7 +71,7 @@ def build_document_map(product_id: str) -> str:
                 current_source = s["source_id"]
                 parts.append(f"\n[{current_source}]")
             summary = s["summary"][:150] if s["summary"] else "(pending)"
-            parts.append(f"  p{s['page']}: {summary}")
+            parts.append(f"  Page {s['page']}: {summary}")
         parts.append("")
 
     return "\n".join(parts)
@@ -149,8 +160,47 @@ def build_initial_search_context(product_id: str, user_message: str) -> str:
                 parts.append(r["summary"])
 
     parts.append("\n--- End of retrieved context ---")
-    parts.append("If this context is not sufficient, use search_manual or get_page_text tools for more pages.")
+    parts.append("If this context does not fully answer the question, refer to the Document Map and Page Summaries above to identify relevant pages, then use get_page_text or get_page_image tools to fetch their content.")
     return "\n".join(parts)
+
+
+# Cache for the static part of the system prompt (base + product info + document map).
+# Keyed by product_id. Invalidated on server restart. This avoids rebuilding
+# TOC + page summaries from ~50 DB queries on every single message.
+_static_prompt_cache: dict[str, str] = {}
+
+
+def _build_static_prompt(product_id: str) -> str:
+    """Build the static part: base instructions + product info + document map.
+
+    This never changes within a product session, so we cache it.
+    """
+    if product_id in _static_prompt_cache:
+        return _static_prompt_cache[product_id]
+
+    product = db.get_product(product_id)
+    if product is None:
+        return DEFAULT_SYSTEM_PROMPT
+
+    custom = product.get("custom_prompt", "").strip()
+    base_prompt = custom if custom else DEFAULT_SYSTEM_PROMPT
+
+    parts = [base_prompt]
+
+    parts.append(f"\n## Product: {product['name']}")
+    if product.get("description"):
+        parts.append(f"{product['description']}")
+
+    doc_map = build_document_map(product_id)
+    if doc_map.strip():
+        parts.append(f"\n## Document Map\n{doc_map}")
+    else:
+        parts.append("\n## Document Map\nNo documents have been processed yet.")
+
+    result = "\n".join(parts)
+    _static_prompt_cache[product_id] = result
+    logger.info(f"[PROMPT] Cached static prompt for {product_id} ({len(result)} chars)")
+    return result
 
 
 def build_system_prompt(
@@ -159,34 +209,17 @@ def build_system_prompt(
 ) -> str:
     """Build the complete system prompt for the agent.
 
-    Includes: base instructions + product info + document map + initial search context.
+    Static part (base + product + doc map) is cached per product.
+    Dynamic part (search context) is computed per message.
     """
-    product = db.get_product(product_id)
-    if product is None:
-        return DEFAULT_SYSTEM_PROMPT
+    static_part = _build_static_prompt(product_id)
 
-    # Base prompt: custom or default
-    custom = product.get("custom_prompt", "").strip()
-    base_prompt = custom if custom else DEFAULT_SYSTEM_PROMPT
+    if not user_message:
+        return static_part
 
-    parts = [base_prompt]
+    # Dynamic: hybrid search context for this specific query
+    search_context = build_initial_search_context(product_id, user_message)
+    if search_context:
+        return f"{static_part}\n\n{search_context}"
 
-    # Product info (always included)
-    parts.append(f"\n## Product: {product['name']}")
-    if product.get("description"):
-        parts.append(f"{product['description']}")
-
-    # Document map (always included)
-    doc_map = build_document_map(product_id)
-    if doc_map.strip():
-        parts.append(f"\n## Document Map\n{doc_map}")
-    else:
-        parts.append("\n## Document Map\nNo documents have been processed yet.")
-
-    # Initial search context (hybrid search on user query)
-    if user_message:
-        search_context = build_initial_search_context(product_id, user_message)
-        if search_context:
-            parts.append(f"\n{search_context}")
-
-    return "\n".join(parts)
+    return static_part
