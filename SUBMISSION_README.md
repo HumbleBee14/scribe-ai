@@ -1,133 +1,435 @@
-# Vulcan OmniPro 220 Multimodal Agent
+# Prox - ProductManualQnA Platform
 
-A production-grade multimodal reasoning agent for the Vulcan OmniPro 220 welding system built directly on the Claude Agent SDK with an MCP-backed knowledge engine.
+> Turn any manual into a smart agent.
 
-## Quickstart
+A production-grade multimodal reasoning platform that transforms product manuals into AI-powered Q&A assistants. Upload any PDF manual, and the system builds a knowledge base that answers questions with exact data, visual references, and page citations.
+
+Built for the Prox Founding Engineer Challenge using the **Claude Agent SDK**.
+
+**Live demo:** [prox.dineshyadav.com](https://prox.dineshyadav.com)
+
+---
+
+## Quick Start (< 2 minutes)
 
 ```bash
-git clone <repo>
+git clone <repo-url>
 cd multimodal-prox-challenge
-cp .env.example .env   # Add your ANTHROPIC_API_KEY
-make setup             # Install backend + frontend dependencies
-make backend           # Start backend (terminal 1)
-make frontend          # Start frontend (terminal 2)
-# Open http://localhost:3000
+cp .env.example .env          # Add your ANTHROPIC_API_KEY
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.cargo/bin:$PATH"
+make                           # Installs everything + starts backend
+# OR (once installation setup done), start Backend:
+make backend
+
+# In another terminal, start Frontend:
+make frontend                  # Starts Next.js on localhost:3000
 ```
 
-Or without Make:
+The Vulcan OmniPro 220 manual comes pre-ingested with all 51 pages analyzed. Open `localhost:3000` and start chatting immediately.
 
-```bash
-cd backend && uv venv && uv pip install -e ".[dev]" && uv run python run_server.py
-cd frontend && npm install && npm run dev
-```
+---
 
-No Docker required. No database to install. SQLite is created automatically.
-
-## What This Agent Does
-
-Ask it anything about the Vulcan OmniPro 220 and it will:
-
-- **Answer with exact data**: duty cycles, polarity setups, specifications. Values come from pre-verified structured JSON, never hallucinated.
-- **Draw diagrams**: polarity/wiring diagrams rendered as SVG, troubleshooting flowcharts as Mermaid, comparison tables as interactive HTML.
-- **Show manual pages**: references the actual manual with page numbers and images.
-- **Diagnose welds**: upload a photo of your weld and get a diagnosis with reference to the manual's weld diagnosis guide.
-- **Remember context**: tracks your selected process, voltage, and material across the conversation.
-- **Surface safety warnings**: proactively warns about electrical, fire, fume, and arc ray hazards when discussing procedures.
-- **Ask for clarification**: when a question is ambiguous (missing process or voltage), asks before guessing.
-
-## Architecture
+## Architecture Overview
 
 ```
-Frontend (Next.js 16)          Backend (Python FastAPI)
-+------------------+           +-------------------------------+
-| Chat UI          |   SSE     | Claude Agent SDK runtime     |
-| Artifact viewers | <-------> | + MCP welding knowledge      |
-| Session sidebar  |           | + Built-in Read tool         |
-| Image upload     |           | + Streaming event mapper     |
-+------------------+           |                               |
-                               | Knowledge Engine:            |
-                               | - Structured JSON            |
-                               | - BM25 retrieval             |
-                               | - Validation module          |
-                               +-------------------------------+
+                                    +------------------+
+                                    |   Next.js UI     |
+                                    |  (SSE streaming)  |
+                                    +--------+---------+
+                                             |
+                                    +--------v---------+
+                                    |   FastAPI Backend |
+                                    +--------+---------+
+                                             |
+                         +-------------------+-------------------+
+                         |                                       |
+              +----------v----------+                 +----------v----------+
+              |  Claude Agent SDK   |                 |  Ingestion Pipeline |
+              |  (reasoning loop)   |                 |  (one-time per doc) |
+              +----------+----------+                 +----------+----------+
+                         |                                       |
+              +----------v----------+              Stage 1: Render (PyMuPDF)
+              |    MCP Tool Server  |              Stage 2: OCR (Claude Vision)
+              |  search_manual      |              Stage 3: Embed (MiniLM)
+              |  get_page_text      |                        |
+              |  get_page_image     |              +---------v---------+
+              |  calculate          |              |     SQLite DB     |
+              |  clarify_question   |              |  FTS5 + sqlite-vec|
+              |  update_memory      |              +-------------------+
+              +---------------------+
 ```
 
-### Runtime Strategy
+---
 
-The backend uses the Claude Agent SDK as the single orchestration runtime. Product-specific capabilities are exposed as MCP tools, and the SDK's built-in `Read` tool handles broader manual access.
+## How It Works: The Full Pipeline
 
-Why this design:
-- One orchestration stack is easier to reason about, test, and extend.
-- MCP tools preserve exact-data lookups and deterministic validation.
-- The SDK provides native sessions, partial streaming events, and prompt-caching benefits without maintaining a second custom tool loop.
+### Phase 1: Document Ingestion
 
-### Knowledge Engine: Three Retrieval Paths
+When a user uploads a PDF manual, it goes through a 3-stage pipeline. Each page is processed independently, so failures on one page don't block others.
 
-**Path 1: Exact-data tools** (highest confidence)
-- 5 grounded lookup tools backed by verified JSON, plus helper tools for clarification, page images, artifacts, and weld diagnosis routing
-- Duty cycles, polarity, specs, troubleshooting, safety warnings
-- Deterministic validation compares proposed answers against ground truth
-- Zero hallucination risk on critical technical values
+```
+PDF uploaded
+  |
+  v
++------------------------------------------+
+| Stage 1: RENDER (local, ~2s for 48 pages)|
+|  PyMuPDF converts each page to PNG       |
+|  at 200 DPI. Stored on disk.             |
+|  Status: pending                         |
++--------------------+---------------------+
+                     |
+                     v
++------------------------------------------+
+| Stage 2: OCR (Claude Vision API)         |
+|  Each page PNG sent to Claude Sonnet     |
+|  with a detailed extraction prompt.      |
+|                                          |
+|  Extracts per page:                      |
+|    - summary (2-3 sentences)             |
+|    - detailed_text (full content)        |
+|    - keywords (searchable terms)         |
+|    - is_toc (table of contents flag)     |
+|                                          |
+|  Prompt caching: static system prompt    |
+|  cached after page 1, ~90% savings on    |
+|  pages 2+.                               |
+|                                          |
+|  Tables -> markdown format               |
+|  Images -> detailed descriptions         |
+|  Steps -> exact numbering preserved      |
+|  Warnings -> level + full text           |
+|                                          |
+|  Status: ocr                             |
++--------------------+---------------------+
+                     |
+                     v
++------------------------------------------+
+| Stage 3: EMBED (local, ~5s total)        |
+|  sentence-transformers (MiniLM-L6-v2)    |
+|  generates 384-dim vector per page.      |
+|  Stored in SQLite via sqlite-vec.        |
+|  Status: done                            |
++------------------------------------------+
+```
 
-**Path 2: BM25 retrieval** (open-ended questions)
-- 53 text chunks indexed with BM25Okapi
-- Query profile routing (troubleshooting, visual, safety, etc.)
-- Section-based score boosting
-- Sentence-level compression (~60% token savings)
-- Exact-tool precedence enforced: duty cycle/polarity queries redirect to exact tools
+**Why Claude Vision OCR instead of text extraction?**
 
-**Path 3: Built-in Read access** (broad manual access)
-- The Claude Agent SDK reads targeted portions of the owner manual on demand
-- Supplements (does not replace) exact-data tools
-- Keeps broad-question retrieval inside the same SDK runtime and tool loop
+PyMuPDF text extraction fails on complex layouts: multi-column pages, text overlapping images, tables with merged cells. Claude Vision sees the page as a human would and extracts content accurately, including describing diagrams and converting tables to clean markdown. The one-time API cost (~$1 for a 48-page manual) is worth the accuracy gain.
 
-### Artifact System
+**Why page-level granularity?**
 
-When text is not enough, the agent generates visual content:
+Each page in a product manual is typically a self-contained topic (a spec table, a procedure section, a diagram). Page-level chunking preserves this natural structure. The OCR summary tells the agent what each page contains, the detailed_text gives full content, and keywords enable search.
 
-| Type | Renderer | Example |
-|------|----------|---------|
-| Polarity diagrams | SVG (sandboxed iframe) | Cable connection maps with red=positive, blue=negative |
-| Troubleshooting flows | Mermaid | Decision trees for diagnosing weld problems |
-| Spec comparisons | HTML (sandboxed iframe) | Interactive comparison tables |
-| Settings matrices | HTML | Process/material/thickness recommendations |
+### Phase 2: Knowledge Storage
 
-All artifacts include source page references linking back to the manual.
+Everything lives in a single SQLite database file (`data/local.db`):
 
-### Session Management
+| Table | Purpose |
+|-------|---------|
+| `products` | Product profiles (name, description, status) |
+| `categories` | Product tags (up to 3) |
+| `sources` | Uploaded PDF files with per-source processing status |
+| `page_analysis` | OCR results: summary, detailed_text, keywords, is_toc per page |
+| `page_embeddings` | 384-dim float vectors per page (for semantic search) |
+| `page_vec` | sqlite-vec virtual table for native vector similarity |
+| `page_fts` | FTS5 virtual table for BM25 keyword search |
+| `toc_entries` | Extracted table of contents with section -> page mapping |
+| `memories` | Per-product user preferences (persisted across sessions) |
+| `conversations` | Chat history with full message persistence |
+| `quick_actions` | Preset questions shown on the welcome screen |
 
-The agent tracks conversation context:
-- Current welding process (MIG, TIG, Stick, Flux-Cored)
-- Input voltage (120V, 240V)
-- Material and thickness
-- Safety warnings already shown (avoids repeating)
-- Setup steps completed
+**Why SQLite?**
 
-Multi-turn conversations persist bounded chat history in the app session manager.
+Single file, zero infrastructure, committed to git. Evaluators clone and run -- no database setup, no migrations, no Docker. FTS5 and sqlite-vec are built-in extensions that give us BM25 ranking and vector similarity search without external services.
 
-### Evidence Model
+### Phase 3: Query-Time Retrieval
 
-Every answer is backed by typed evidence:
-- `document`, `page`, `type` (text_block, table, figure, page_region)
-- `bbox` coordinates and `cropUrl` for region-level grounding
-- `exactness` label: `native_pdf` or `vision_ocr`
+When a user asks a question, the system runs a hybrid search pipeline BEFORE the agent starts, injecting relevant page content into the system prompt:
+
+```
+User query: "What's the duty cycle for MIG at 240V?"
+                     |
+         +-----------+-----------+
+         |                       |
++--------v--------+    +--------v--------+
+| FTS5 Keyword    |    | Vector Semantic |
+| Search (BM25)   |    | Search          |
+|                 |    | (sqlite-vec)    |
+| Weighted columns|    |                 |
+| keywords: 5x    |    | Embed query     |
+| summary:  3x    |    | with MiniLM     |
+| text:     1x    |    | L2 distance     |
++---------+-------+    +--------+--------+
+          |                      |
+          +----------+-----------+
+                     |
+              +------v------+
+              | Hybrid Merge|
+              |             |
+              | FTS: 0-0.50 |
+              | Vec: 0-0.50 |
+              | Combined    |
+              +------+------+
+                     |
+              +------v---------+
+              | Cross-Encoder  |
+              | Reranking      |
+              |                |
+              | ms-marco-      |
+              | MiniLM-L-6-v2  |
+              | Scores each    |
+              | (query, page)  |
+              | pair together  |
+              +------+---------+
+                     |
+              +------v-------+
+              | Qualification|
+              | Filter       |
+              |              |
+              |Path A: strong|
+              |   semantic   |
+              |   alone      |
+              | Path B: both |
+              |   signals    |
+              |   required   |
+              +------+-------+
+                     |
+              +------v------+
+              | Score thresh|
+              | >= 0.52     |
+              | Max 3 pages |
+              +------+------+
+                     |
+                     v
+        Top 3 pages full detailed_text
+        injected into system prompt
+```
+
+**Why this 4-layer pipeline?**
+
+- **FTS5/BM25** catches exact keyword matches: "duty cycle", "240V", "MIG"
+- **Embedding search** catches semantic meaning: "my welder keeps stopping" matches "thermal protection shutdown"
+- **Cross-encoder reranking** scores each (query, page) pair together for precision -- unlike bi-encoders that encode query and document separately, the cross-encoder sees both simultaneously and produces a more accurate relevance score
+- **Qualification filter** requires either strong semantic match alone or both signals together, preventing weak single-signal results from polluting context
+
+### Phase 4: Agent Reasoning Loop
+
+The Claude Agent SDK manages the reasoning loop. The agent receives:
+
+1. **System prompt** with generic instructions
+2. **Product info** (name, description)
+3. **Document map** -- TOC entries + one-line summary per page (the agent's "table of contents" for the entire manual)
+4. **Retrieved context** -- full detailed_text of top 3 most relevant pages (from hybrid search)
+5. **Tool definitions** -- 6 MCP tools registered via the SDK
+
+```
+Agent receives system prompt + document map + retrieved context
+                     |
+                     v
+            Does retrieved context
+            answer the question?
+           /                    \
+         YES                     NO
+          |                       |
+    Answer directly          Use tools to
+    with citations           gather more
+          |                       |
+          |              +--------+--------+
+          |              |                 |
+          |     search_manual        get_page_text
+          |     (rephrase +          (specific pages
+          |      re-search)          from doc map)
+          |              |                 |
+          |              +--------+--------+
+          |                       |
+          |                Need visual?
+          |                /           \
+          |              YES            NO
+          |               |              |
+          |        get_page_image   Answer with
+          |        (shows to user   text citations
+          |         + agent sees)
+          |               |
+          +------+--------+
+                 |
+          Generate response
+          with citations +
+          optional artifacts
+          (HTML/Mermaid/SVG)
+```
+
+**Key design decision: Document map as the agent's index**
+
+Instead of sending the entire manual or relying solely on search, we send a one-line summary of every page. This gives the agent a "table of contents on steroids" -- it knows what page 7 contains (specifications), what page 23 contains (duty cycle table), what page 45 contains (wiring schematic). The agent uses this to make informed decisions about which pages to read, without us having to predict what it needs.
+
+### Phase 5: Response Delivery
+
+Responses stream to the frontend via SSE (Server-Sent Events):
+
+- **text_delta** -- streamed text tokens
+- **tool_start/tool_end** -- shows which tools the agent is using
+- **image** -- inline page image from the manual
+- **clarification** -- interactive clarification card with clickable options
+- **done** -- completion with token usage stats
+
+**Inline artifacts** are detected by parsing `<artifact>` tags from the agent's text response:
+- `type="html"` -- rendered in a sandboxed iframe (calculators, comparison tables)
+- `type="mermaid"` -- rendered via Mermaid.js in a sandboxed iframe (flowcharts, decision trees)
+- `type="svg"` -- rendered directly (diagrams, schematics)
+
+---
 
 ## Design Decisions
 
-### Why Claude Agent SDK as the only runtime?
-The challenge explicitly asks for the Anthropic Claude Agent SDK, and using it directly keeps the product aligned with that requirement. A single runtime also avoids maintaining duplicate orchestration logic for tools, multimodal input, streaming, and session handling.
+### 1. Product/Document agnostic platform
 
-### Why structured JSON for exact data?
-The challenge tests exact technical values. "What's the duty cycle for MIG at 200A on 240V?" must return exactly "25%". Semantic search over text chunks risks returning paraphrased or adjacent values. Pre-verified JSON with deterministic validation ensures exact answers.
+The entire system is product-agnostic. The Vulcan OmniPro 220 is the first product example seeded, but the same platform handles any PDF manual. No hardcoded product logic anywhere, works flawlessly with any documents:
+- System prompt is generic
+- Tools are generic (search, read, show, calculate, clarify, remember)
+- Ingestion pipeline works on any PDF
+- OCR prompt extracts content without domain assumptions
 
-### Why BM25 over vector search?
-For a single 48-page manual, BM25 provides strong retrieval quality with zero infrastructure (no vector DB, no embedding model). The system is designed to add vector retrieval via optional pgvector for production scaling to multiple products.
+### 2. Vision-guided OCR over text extraction
 
-### Why sandboxed iframes for artifacts?
-SVG and HTML from an LLM can contain XSS vectors (onload handlers, javascript: URLs, foreignObject). Rendering in sandboxed iframes (allow-scripts only) prevents cross-origin attacks while still allowing interactive content.
+We send each page as an image to Claude Vision rather than extracting text with PyMuPDF. This costs more but produces dramatically better results for pages with:
+- Complex table layouts (specification matrices, troubleshooting grids)
+- Diagrams with labels (wiring schematics, assembly drawings)
+- Mixed text/image content (step-by-step procedures with illustrations)
+- Multi-column layouts
 
-### Why SQLite locally?
-Evaluators should be running within 2 minutes. No Docker, no database setup. SQLite is created automatically. The architecture supports Postgres + pgvector for production.
+### 3. SQLite for everything
+
+One file, zero setup. FTS5 for keyword search, sqlite-vec for vector search, regular tables for metadata. Committed to git so evaluators get a pre-built knowledge base. No Docker, no external databases.
+
+### 4. Hybrid retrieval with qualification filtering
+
+Neither keyword search nor semantic search alone is sufficient:
+- "duty cycle MIG 240V" needs exact keyword matching
+- "my welder keeps shutting off" needs semantic understanding
+
+Our hybrid pipeline merges both signals with a qualification filter that requires either strong semantic match alone or both signals together, preventing weak results from polluting the agent's context.
+
+### 5. Safe calculator to prevent hallucinated math
+
+LLMs are notoriously unreliable at arithmetic. When a user asks "If duty cycle is 30% at 175A, how long can I weld in 10 minutes?", the agent should not guess -- it should compute. The `calculate` tool uses Python's AST module to safely evaluate math expressions without `eval()`. Only whitelisted operations (arithmetic, sqrt, trig, log, round, etc.) are allowed. No code injection possible.
+
+This ensures the agent never interpolates or hallucinates numerical values. It either finds the exact value in the manual, or computes it deterministically with the calculator.
+
+### 6. Persistent user memory
+
+The agent can learn and remember user preferences across conversations via the `update_memory` tool:
+
+- **Agent adds automatically** -- if the user mentions "I'm a beginner" or "I usually work with 240V", the agent saves it without being asked
+- **User adds manually** -- the sidebar has a Preferences section where users can type and add their own context
+- **Agent or user can delete** -- outdated preferences are removable from either side
+- **Max 6 per product** -- keeps context focused, auto-evicts oldest if full
+- **Injected every conversation** -- memories are loaded from the database and included in the system prompt, so the agent personalizes from the first message
+
+This means the agent gets better over time. A returning user doesn't need to re-explain their setup, experience level, or typical use case.
+
+### 7. Multi-page reasoning across independent sources
+
+Complex questions often span multiple manual sections. The agent handles this naturally:
+
+- The document map shows what every page contains across all uploaded documents
+- The agent makes multiple independent tool calls to gather pieces from different pages
+- For "Walk me through MIG setup" -- it fetches pages 10-14 (wire setup), page 8 (controls), and page 14 (polarity), then synthesizes a complete walkthrough
+- For "Compare MIG vs TIG specs" -- it fetches the MIG specs page and the TIG specs page independently, then builds a comparison table as an HTML artifact
+- Each tool call is independent -- fetching page 7 doesn't affect fetching page 24
+
+The agent doesn't need us to pre-select pages or build a context window. It reads the document map, identifies which pages it needs, fetches them, and combines the information.
+
+### 8. Dynamic interactive artifacts
+
+The agent proactively generates interactive visual content when it helps understanding:
+
+- **HTML artifacts** -- duty cycle calculators, settings configurators, specification comparison tables with styled headers and interactive elements
+- **Mermaid flowcharts** -- troubleshooting decision trees, setup procedure flows, process selection guides
+- **SVG diagrams** -- connection diagrams, layout illustrations
+
+Artifacts are rendered inline in the chat in sandboxed iframes. Users can expand them to full screen. The agent decides when a visual would explain better than text -- it's not forced to generate artifacts on every response, only when the answer genuinely benefits from visual representation.
+
+### 9. Custom system prompts per product
+
+Each product workspace has an optional custom system prompt field. Users can add product-specific instructions:
+
+- "Always mention safety warnings before any procedure"
+- "This user base is primarily beginners, explain terms simply"
+- "When discussing settings, always include the recommended range from the manual"
+
+If set, the custom prompt is appended to the default generic instructions. The document map, tools, and retrieval context are always included regardless. This lets users tune the agent's behavior for their specific product without modifying code.
+
+### 10. Web search for external knowledge
+
+The agent has access to WebSearch (built into the Agent SDK) for questions that go beyond the manual:
+
+- "Is this welder compatible with a 30A breaker?" -- manual may not cover electrical compatibility
+- "What's the best argon mix for aluminum?" -- general industry knowledge
+- "Where can I buy replacement tips?" -- availability, pricing
+
+The system prompt enforces strict guardrails: the manual is always the source of truth for product specifications, procedures, and safety. Web search is only used when the documents genuinely don't cover the topic. When web results are used, the agent explicitly cites them as external sources.
+
+### 11. Agent decides, not us
+
+We inject the document map and initial context, but the agent decides what to do:
+- If the context answers the question, it responds directly (no unnecessary tool calls)
+- If it needs more, it calls search_manual with rephrased terms
+- If it needs visuals, it calls get_page_image (which shows to the user AND the agent sees it too for visual analysis)
+- If the question is ambiguous, it asks for clarification
+- If the question requires math, it uses the safe calculator tool
+- If the manual doesn't cover the topic, it can search the web
+
+We don't build a rigid pipeline -- we give the agent the right tools and let it reason.
+
+---
+
+## Tools
+
+| Tool | Purpose |
+|------|---------|
+| `search_manual` | Hybrid FTS5 + vector search across all pages. Returns ranked summaries. |
+| `get_page_text` | Full detailed text for specific pages (max 5 per call). |
+| `get_page_image` | Shows page PNG to user AND delivers base64 to agent for visual analysis. |
+| `calculate` | Safe math evaluator (AST-based, no eval). Prevents hallucinated math -- agent computes exact values instead of guessing. |
+| `clarify_question` | Asks user for more info with optional clickable choices. |
+| `update_memory` | Persists user preferences across conversations (max 6 per product). |
+
+Plus built-in Agent SDK tools:
+- **Read** -- agent can read any file, including page images for vision analysis
+- **WebSearch** -- for questions outside the manual's scope (used sparingly)
+
+---
+
+## Frontend Features
+
+- **Product dashboard** -- create, edit, delete product workspaces with categories, logo, and custom system prompt
+- **Real-time tool transparency** -- users see what the agent is doing as it works: "Searching manual...", "Read pages 7, 19, 23", "Loaded page 45", "Calculated: 175 * 0.30". Tool calls are collapsible with success/failure indicators
+- **Inline artifacts** -- HTML calculators, Mermaid flowcharts, SVG diagrams rendered in-chat with expand-to-fullscreen
+- **Manual preview** -- tabbed PDF viewer per document, scrollable, text-selectable, browser-cached
+- **Image upload** -- paste from clipboard, file picker, or mobile camera capture. Agent analyzes uploads with Vision and cross-references manual pages
+- **Voice mode** -- browser-native STT + TTS with hands-free conversational loop. Per-message replay button. Smart filtering strips emoji, markdown, artifacts for clean speech
+- **Chat persistence** -- conversations stored in SQLite with editable titles, survive page reloads
+- **User memories** -- persistent preferences in sidebar, editable by user or auto-added by agent
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 15, TypeScript, React, Tailwind CSS v4 |
+| Backend | Python, FastAPI, Claude Agent SDK |
+| Database | SQLite + FTS5 + sqlite-vec |
+| OCR | Claude Vision API (Sonnet 4.6) with prompt caching |
+| Embeddings | sentence-transformers (all-MiniLM-L6-v2, local, free) |
+| Cross-encoder | ms-marco-MiniLM-L-6-v2 (reranking, local) |
+| Vector search | sqlite-vec (native C extension, pip installable) |
+| PDF rendering | PyMuPDF |
+| Artifacts | Mermaid.js, sandboxed iframes |
+| Voice | Web Speech API (browser-native STT + TTS) |
+
+---
 
 ## Project Structure
 
@@ -135,79 +437,57 @@ Evaluators should be running within 2 minutes. No Docker, no database setup. SQL
 multimodal-prox-challenge/
   backend/
     app/
-      agent/         # Orchestrator, tools, MCP wrappers, system prompt
-      api/           # FastAPI routes (chat, products, assets)
-      core/          # Config, database, bootstrap, seed
-      context/       # Context assembler and routing
-      ingest/        # Background ingestion pipeline
-      knowledge/     # Structured store
-      packs/         # Product registry and manifest models
-      retrieval/     # BM25 search, query profiles
-      session/       # Session manager
-      validation/    # Deterministic answer validation
-    scripts/         # Page rendering, chunk extraction, seed, eval
-    tests/
+      agent/
+        orchestrator.py      # Agent SDK runtime, SSE event mapping
+        prompts.py           # System prompt builder with document map
+        tools/
+          tools.py           # Tool definitions + hybrid search + execution
+          tools_mcp.py       # MCP wrappers for Agent SDK
+          calculator.py      # Safe AST-based math evaluator
+      api/
+        chat.py              # SSE streaming chat endpoint
+        products.py          # Product CRUD, upload, assets
+      core/
+        bootstrap.py         # App factory, lifespan, logging
+        database.py          # SQLite schema, CRUD, FTS5, sqlite-vec
+        config.py            # Settings from .env
+      ingest/
+        pipeline.py          # 3-stage per-page orchestrator
+        ocr_vision.py        # Claude Vision OCR with prompt caching
+        build_embeddings.py  # Local sentence-transformers embeddings
+        render_pages.py      # PDF to PNG rendering
+        jobs.py              # Background job management
+      packs/
+        registry.py          # Product file management
+        models.py            # ProductManifest, ProductRuntime
+      session/
+        manager.py           # Minimal session for SDK resume
   frontend/
     src/
+      app/                   # Next.js pages (dashboard, workspace)
       components/
-        artifacts/   # Mermaid, SVG, HTML renderers
-        chat/        # Message bubble, input, welcome screen
-        evidence/    # Session sidebar, source viewer
-        products/    # Dashboard, workspace, create/edit dialog
-      lib/           # SSE client, useChat hook, product API
-      types/         # Typed event contracts
+        chat/                # Message bubble, input, welcome screen
+        artifacts/           # Mermaid, SVG, HTML viewers + modal
+        products/            # Dashboard, workspace, dialogs
+        evidence/            # Source viewer, memories
+      lib/
+        api.ts               # Backend API client
+        use-chat.ts          # SSE streaming hook
+        use-voice.ts         # STT + TTS hook
+        artifacts.ts         # Artifact tag parser
   data/
-    products/        # All product data lives here
-      vulcan-omnipro-220/
-        pack.yaml          # Product manifest
-        files/             # Source PDFs + logo
-        assets/pages/      # Rendered page PNGs
-        assets/figures/    # Cropped diagrams
-        structured/        # Extracted JSON (specs, duty cycles, etc.)
-        index/             # Chunks, search indexes
-        graph/             # Knowledge map artifacts
-        jobs/              # Ingestion status
-        conversations/     # Chat state
-    local.db         # SQLite database (pre-seeded, committed to git)
+    products/                # Product files + page images
+    local.db                 # SQLite database (pre-seeded)
 ```
 
-## Testing
+---
 
-```bash
-make test              # Unit tests (104 passing)
-make lint              # Backend + frontend lint
-make eval              # Full eval suite (16 live cases, needs API key)
-```
+## What Makes This Submission Different
 
-Or without Make:
-
-```bash
-cd backend && uv run pytest tests/ -v
-cd backend && uv run ruff check app/ tests/
-cd frontend && npm run lint
-cd backend && uv run python scripts/run_eval.py
-```
-
-## Generalizing to Other Products
-
-The architecture is designed as a reusable document-intelligence platform:
-
-1. Create a product via the dashboard UI or API (`POST /api/products`)
-2. Upload PDF manuals (files stored in `data/products/<id>/files/`)
-3. Processing runs automatically (page rendering, chunk extraction, indexing)
-4. The agent serves the new product with the same tools and UI
-5. Each product is fully isolated: its own files, indexes, conversations, and database records
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Agent runtime | Claude Agent SDK (`claude-agent-sdk`) |
-| Model | Claude Sonnet 4.6 |
-| Backend | Python, FastAPI, Pydantic |
-| Frontend | Next.js 16, TypeScript, React 19, Tailwind CSS |
-| Search | BM25 (rank-bm25) |
-| PDF processing | PyMuPDF |
-| Artifacts | Mermaid.js, sandboxed iframes |
-| Local storage | SQLite + filesystem |
-| Production | Postgres + pgvector (optional) |
+1. **Generic platform** -- not hardcoded to one product. Upload any manual and it works.
+2. **Vision-guided OCR** -- Claude Vision reads each page as a human would, not just text extraction.
+3. **Hybrid retrieval** -- FTS5 keyword + semantic vector search with qualification filtering.
+4. **Document map architecture** -- agent gets a full index of the manual, decides what to read.
+5. **Agent autonomy** -- we provide context and tools, the agent reasons about what to do.
+6. **Production features** -- voice mode, dark theme, chat persistence, user memories, manual preview.
+7. **Zero infrastructure** -- SQLite for everything, single `make` command to run.
