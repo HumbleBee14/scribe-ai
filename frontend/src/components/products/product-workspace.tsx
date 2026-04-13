@@ -399,6 +399,7 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
                     <MessageBubble
                       key={msg.id}
                       message={msg}
+                      productId={activeProductId}
                       onQuickReply={handleSend}
                       onSelectSourcePage={setSelectedSource}
                       onSpeak={voice.supported ? (text) => handleSpeak(msg.id, text) : undefined}

@@ -12,6 +12,7 @@ import {
   User,
   Volume2,
 } from "lucide-react";
+import { buildBackendUrl } from "@/lib/api";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import {
   FollowUpSuggestions,
@@ -24,6 +25,7 @@ import type { ChatMessage, SelectedSourcePage } from "@/types/events";
 
 interface Props {
   message: ChatMessage;
+  productId?: string;
   onQuickReply?: (message: string) => void;
   onSelectSourcePage?: (source: SelectedSourcePage) => void;
   onSpeak?: (text: string) => void;
@@ -32,6 +34,7 @@ interface Props {
 
 export function MessageBubble({
   message,
+  productId,
   onQuickReply,
   onSelectSourcePage,
   onSpeak,
@@ -74,6 +77,32 @@ export function MessageBubble({
               return (
                 <button
                   key={`${message.id}-upload-${i}`}
+                  type="button"
+                  onClick={() => setLightboxSrc(src)}
+                  className="block shrink-0"
+                  title="Click to expand"
+                >
+                  <Image
+                    src={src}
+                    alt={`Uploaded reference ${i + 1}`}
+                    unoptimized
+                    width={64}
+                    height={64}
+                    className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-neutral-700 hover:opacity-90 transition-opacity"
+                  />
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {/* Persisted user images loaded from DB (file paths, not base64) */}
+        {!message.images?.length && message.uploadedImagePaths && message.uploadedImagePaths.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {message.uploadedImagePaths.map((imgPath, i) => {
+              const src = buildBackendUrl(`/api/products/${productId}/assets/${imgPath}`);
+              return (
+                <button
+                  key={`${message.id}-persisted-${i}`}
                   type="button"
                   onClick={() => setLightboxSrc(src)}
                   className="block shrink-0"

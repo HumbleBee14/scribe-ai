@@ -74,7 +74,7 @@ def _get_tool_label(tool_name: str, tool_input: dict | None = None) -> str:
     if clean == "get_page_image":
         page = tool_input.get("page")
         if page:
-            return f"Loaded page {page} image"
+            return f"Loaded page {page}"
 
     if clean == "calculate":
         expr = tool_input.get("expression", "")
