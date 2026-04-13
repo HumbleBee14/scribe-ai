@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Home, LibraryBig, Loader2, PanelLeftOpen, RefreshCw } from "lucide-react";
+import { AlertTriangle, Headphones, Home, LibraryBig, Loader2, PanelLeftOpen, RefreshCw } from "lucide-react";
 import {
   BACKEND_URL,
   buildBackendUrl,
@@ -21,6 +21,7 @@ import { HistorySidebar } from "@/components/layout/history-sidebar";
 import { MobileContextPanel } from "@/components/layout/mobile-context-panel";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { ManualPreviewDialog } from "@/components/products/manual-preview-dialog";
+import { useVoice } from "@/lib/use-voice";
 import type { SelectedSourcePage } from "@/types/events";
 
 interface Props {
@@ -48,6 +49,39 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
 
   const { messages, isStreaming, newConversationId, sendMessage, stopStreaming, clearMessages } =
     useChat(activeProductId, conversationId);
+
+  // Voice: STT + TTS
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const voice = useVoice({
+    onTranscript: (text) => {
+      sendMessage(text);
+    },
+  });
+
+  const handleSpeak = useCallback((msgId: string, text: string) => {
+    setSpeakingMsgId(msgId);
+    voice.speak(text);
+    // Clear when done (voice state goes back to idle)
+  }, [voice]);
+
+  // Clear speakingMsgId when voice stops
+  useEffect(() => {
+    if (!voice.isSpeaking) setSpeakingMsgId(null);
+  }, [voice.isSpeaking]);
+
+  // Auto-TTS when agent finishes responding (hands-free mode)
+  const lastMsgCountRef = useRef(0);
+  useEffect(() => {
+    if (!voice.handsFreeModeOn || isStreaming) return;
+    const assistantMsgs = messages.filter((m) => m.role === "assistant");
+    if (assistantMsgs.length > lastMsgCountRef.current) {
+      const lastMsg = assistantMsgs[assistantMsgs.length - 1];
+      if (lastMsg.content) {
+        voice.speak(lastMsg.content);
+      }
+    }
+    lastMsgCountRef.current = assistantMsgs.length;
+  }, [messages, isStreaming, voice]);
 
   // When backend creates a new conversation, update URL (one-time)
   useEffect(() => {
@@ -295,6 +329,21 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
               <LibraryBig suppressHydrationWarning className="h-4 w-4" />
               Context
             </button>
+            {voice.supported && (
+              <button
+                type="button"
+                onClick={() => voice.setHandsFreeMode(!voice.handsFreeModeOn)}
+                className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors ${
+                  voice.handsFreeModeOn
+                    ? "bg-green-500 text-white hover:bg-green-600"
+                    : "border border-gray-200 bg-white text-gray-600 hover:text-gray-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:text-white"
+                }`}
+                title={voice.handsFreeModeOn ? "Hands-free mode ON" : "Enable hands-free mode"}
+              >
+                <Headphones suppressHydrationWarning className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{voice.handsFreeModeOn ? "Hands-free" : "Voice"}</span>
+              </button>
+            )}
             <ThemeToggle />
           </div>
         </header>
@@ -342,6 +391,8 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
                       message={msg}
                       onQuickReply={handleSend}
                       onSelectSourcePage={setSelectedSource}
+                      onSpeak={voice.supported ? (text) => handleSpeak(msg.id, text) : undefined}
+                      isSpeakingThis={speakingMsgId === msg.id && voice.isSpeaking}
                     />
                   ))}
                   <div ref={scrollRef} />
@@ -369,6 +420,14 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
                   onStop={stopStreaming}
                   isStreaming={isStreaming}
                   disabled={chatDisabled}
+                  voiceSupported={voice.supported}
+                  isListening={voice.isListening}
+                  isSpeaking={voice.isSpeaking}
+                  interimText={voice.interimText}
+                  handsFreeModeOn={voice.handsFreeModeOn}
+                  onToggleListening={voice.toggleListening}
+                  onStopSpeaking={voice.stopSpeaking}
+                  onToggleHandsFree={voice.setHandsFreeMode}
                 />
               </div>
             </div>
