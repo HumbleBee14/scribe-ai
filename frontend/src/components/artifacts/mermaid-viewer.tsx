@@ -122,18 +122,18 @@ function quoteLabels(code: string): string {
     // Process each node definition on the line.
     // Match: opening brackets + UNQUOTED content + closing brackets.
     // The key: we skip already-quoted labels by checking for " right after open bracket.
+    // Only match node definitions: ID immediately followed by bracket.
+    // This skips edge labels like -- "text" --> which are already quoted.
     return line.replace(
-      /(\(\[|\[|\(\(|\(|\{)([^"]*?)(\]\)|\]|\)\)|\)|\})/g,
-      (match, open: string, content: string, close: string) => {
-        // Check if content has emojis or escaped brackets
-        const hasEmoji = /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}]/u.test(content);
-        const hasEscBrackets = content.includes("\\[") || content.includes("\\]");
-        if (!hasEmoji && !hasEscBrackets) return match;
+      /([a-zA-Z0-9_])(\(\[|\[|\(\(|\(|\{)([^"]*?)(\]\)|\]|\)\)|\)|\})/g,
+      (match, id: string, open: string, content: string, close: string) => {
+        // Safe: alphanumeric, common punctuation, <br/> tags, math operators
+        if (/^[a-zA-Z0-9 _\-?!.,;:'+=%<>\/\n]*(?:<br\/?>)*[a-zA-Z0-9 _\-?!.,;:'+=%<>\/\n]*$/.test(content)) return match;
 
         // Unescape \[ and \] since they'll be inside quotes now
         let cleaned = content.replace(/\\(\[|\])/g, "$1");
         cleaned = cleaned.replace(/"/g, "'");
-        return `${open}"${cleaned}"${close}`;
+        return `${id}${open}"${cleaned}"${close}`;
       }
     );
   }).join("\n");
