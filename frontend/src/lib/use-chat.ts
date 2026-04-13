@@ -209,6 +209,14 @@ export function useChat(productId: string, conversationId: string | null) {
                   break;
                 }
 
+                case "thinking_start":
+                  msg.thinking = "";
+                  break;
+
+                case "thinking_delta":
+                  msg.thinking = (msg.thinking ?? "") + (data.content as string);
+                  break;
+
                 case "tool_start":
                   msg.toolCalls = [
                     ...(msg.toolCalls ?? []),

@@ -149,6 +149,22 @@ export function MessageBubble({
         {/* Tool calls: show only during streaming; collapse when done */}
         <ToolCallsSection toolCalls={message.toolCalls} isStreaming={!!message.isStreaming} />
 
+        {/* Reasoning / thinking (collapsible, closed by default) */}
+        {message.thinking && (
+          <details className="text-xs text-gray-400 dark:text-neutral-500">
+            <summary className="flex cursor-pointer select-none items-center gap-1.5 hover:text-gray-600 dark:hover:text-neutral-300 transition-colors">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v6l4 2" />
+              </svg>
+              <span>Reasoning</span>
+            </summary>
+            <div className="mt-1.5 ml-5 max-h-48 overflow-y-auto whitespace-pre-wrap border-l-2 border-gray-100 pl-3 leading-relaxed dark:border-neutral-800">
+              {message.thinking}
+            </div>
+          </details>
+        )}
+
         {/* Interleaved content blocks (text, artifacts, images in arrival order) */}
         {/* Consecutive image blocks are grouped into a flex-wrap row */}
         {message.blocks && message.blocks.length > 0 ? (

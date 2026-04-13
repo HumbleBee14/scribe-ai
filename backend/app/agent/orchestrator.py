@@ -198,6 +198,7 @@ class AgentOrchestrator:
             max_turns=MAX_AGENT_TURNS,
             permission_mode="bypassPermissions",
             include_partial_messages=True,
+            thinking={"type": "adaptive"},
             allowed_tools=[
                 "Read",
                 "WebSearch",
@@ -353,6 +354,11 @@ class AgentOrchestrator:
                             "label": _get_tool_label(tool_name),
                         },
                     })
+            elif cb_type == "thinking":
+                results.append({
+                    "event": "thinking_start",
+                    "data": {},
+                })
 
         elif evt_type == "content_block_delta":
             delta = evt.get("delta", {})
@@ -365,6 +371,14 @@ class AgentOrchestrator:
                     results.append({
                         "event": "text_delta",
                         "data": {"content": text},
+                    })
+
+            elif delta_type == "thinking_delta":
+                thinking_text = delta.get("thinking", "")
+                if thinking_text:
+                    results.append({
+                        "event": "thinking_delta",
+                        "data": {"content": thinking_text},
                     })
 
             elif delta_type == "input_json_delta":

@@ -100,6 +100,7 @@ export interface ChatMessage {
   content: string;
   images?: Array<{ mediaType: string; data: string }>;
   toolCalls?: Array<{ tool: string; label: string; ok?: boolean }>;
+  thinking?: string;
   pageImages?: Array<ImageEvent["data"]>;
   safetyWarnings?: Array<SafetyWarningEvent["data"]>;
   clarification?: ClarificationEvent["data"];
