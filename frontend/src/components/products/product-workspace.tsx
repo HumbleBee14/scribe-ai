@@ -329,6 +329,7 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
                     productDescription={
                       activeProduct.description || "Choose a product and ask grounded questions."
                     }
+                    logoUrl={activeProduct.logo_url ?? undefined}
                     quickActions={activeProduct.quick_actions}
                     onQuickAction={(msg) => handleSend(msg)}
                   />

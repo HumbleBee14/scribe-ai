@@ -89,21 +89,21 @@ export function ProductDashboard({
 
       <div className="relative mx-auto max-w-5xl px-4 pb-20 pt-14 sm:px-6 lg:px-8">
         <header className="text-center">
-          <div className="relative mx-auto flex min-h-[7.5rem] w-full max-w-4xl flex-col items-center justify-center py-4 sm:min-h-[8.5rem] sm:py-6">
+          <div className="mx-auto flex w-full max-w-4xl flex-col items-center py-4 sm:py-6">
             <span
-              className="pointer-events-none absolute left-1/2 top-[52%] z-0 -translate-x-1/2 -translate-y-1/2 select-none whitespace-nowrap bg-gradient-to-br from-orange-400/25 via-orange-500/20 to-orange-600/15 bg-clip-text text-[clamp(3.75rem,18vw,10.5rem)] font-black uppercase leading-[0.85] tracking-[0.02em] text-transparent dark:from-orange-400/20 dark:via-orange-500/15 dark:to-orange-600/10 sm:tracking-[0.04em]"
+              className="select-none whitespace-nowrap bg-gradient-to-br from-orange-400/25 via-orange-500/20 to-orange-600/15 bg-clip-text text-[clamp(3.75rem,18vw,10.5rem)] font-black uppercase leading-[0.85] tracking-[0.02em] text-transparent dark:from-orange-400/20 dark:via-orange-500/15 dark:to-orange-600/10 sm:tracking-[0.04em]"
               aria-hidden
             >
               PROX
             </span>
-            <h1 className="relative z-10 mx-auto max-w-2xl text-balance text-3xl font-bold tracking-tight text-gray-900 drop-shadow-[0_1px_0_rgba(255,255,255,0.9)] sm:text-4xl lg:text-[2.35rem] lg:leading-tight dark:text-white dark:drop-shadow-[0_1px_0_rgba(0,0,0,0.5)]">
-              Ask your manual. I&apos;m your live guide.
+            <h1 className="mt-2 mx-auto max-w-2xl text-balance text-center text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl lg:text-[2.35rem] lg:leading-tight dark:text-white">
+              Turn any manual into a smart Agent.
             </h1>
           </div>
         </header>
 
         <p
-          className="mx-auto mt-10 max-w-3xl text-center text-xs leading-relaxed text-gray-500 dark:text-neutral-500 sm:text-sm"
+          className="mx-auto mt-3 max-w-3xl text-center text-xs leading-relaxed text-gray-500 dark:text-neutral-500 sm:text-sm"
           role="note"
         >
           <span className="inline sm:hidden">

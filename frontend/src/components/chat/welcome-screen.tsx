@@ -1,10 +1,12 @@
 "use client";
 
-import { BookOpen, Flame, HelpCircle, Search, Settings, Wrench } from "lucide-react";
+import { BookOpen, FileText, Flame, HelpCircle, Search, Settings, Wrench } from "lucide-react";
+import { buildBackendUrl } from "@/lib/api";
 
 interface Props {
   productName: string;
   productDescription: string;
+  logoUrl?: string;
   quickActions: Array<{ label: string; message: string }>;
   onQuickAction: (message: string) => void;
 }
@@ -22,12 +24,23 @@ const COLORS = [
 export function WelcomeScreen({
   productName,
   productDescription,
+  logoUrl,
   quickActions,
   onQuickAction,
 }: Props) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-      <div className="mb-2 text-4xl">&#x1F525;</div>
+      {logoUrl ? (
+        <img
+          src={buildBackendUrl(logoUrl)}
+          alt={productName}
+          className="mb-4 h-24 w-24 rounded-2xl object-contain"
+        />
+      ) : (
+        <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-2xl bg-gray-100 dark:bg-neutral-800">
+          <FileText className="h-10 w-10 text-orange-500" />
+        </div>
+      )}
       <h2 className="text-xl font-semibold text-gray-900 dark:text-neutral-100">
         {productName}
       </h2>
