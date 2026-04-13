@@ -233,15 +233,28 @@ def _cross_encoder_rerank(
 
         scores = model.predict(pairs, show_progress_bar=False)
 
-        for candidate, score in zip(candidates, scores):
-            candidate["cross_score"] = float(score)
+        # Cross-encoder reranking: use scores ONLY for reordering.
+        # Never modify the hybrid scores -- they feed into the qualification
+        # filter downstream. The cross-encoder just decides the order.
+        import math
+        for candidate, raw_score in zip(candidates, scores):
+            normalized = 1.0 / (1.0 + math.exp(-float(raw_score)))  # sigmoid 0-1
+            candidate["cross_score_raw"] = float(raw_score)
+            candidate["cross_score"] = normalized
+            logger.info(
+                "[RERANK]   %s p%d: hybrid=%.3f cross_raw=%.3f cross_norm=%.3f",
+                candidate.get("source_id", "?"), candidate.get("page", 0),
+                candidate["score"], float(raw_score), normalized,
+            )
 
-        # Re-sort by cross-encoder score
+        # Re-sort by cross-encoder score (better precision for ordering)
+        # but preserve original hybrid scores for qualification filtering
         candidates.sort(key=lambda x: x.get("cross_score", 0.0), reverse=True)
         logger.info(
-            "[RERANK] Reranked %d candidates, top score=%.3f",
+            "[RERANK] Reranked %d candidates, top cross=%.3f, top hybrid=%.3f",
             len(candidates),
             candidates[0].get("cross_score", 0) if candidates else 0,
+            candidates[0].get("score", 0) if candidates else 0,
         )
     except Exception as exc:
         logger.warning("[RERANK] Reranking failed (using original order): %s", exc)

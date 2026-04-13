@@ -112,11 +112,18 @@ def _coerce_page_number(value: Any) -> int | None:
 
 
 class AgentOrchestrator:
-    """Runs the Claude Agent SDK and maps events to our SSE contract."""
+    """Runs the Claude Agent SDK and maps events to our SSE contract.
+
+    Creates one SDK client per product and keeps it alive across messages
+    to avoid subprocess cold-start latency on every request.
+    """
 
     def __init__(self) -> None:
         self._mcp_server = create_knowledge_mcp_server()
         self._model = settings.llm_model
+        # Persistent clients keyed by product_id
+        self._clients: dict[str, ClaudeSDKClient] = {}
+        self._client_options: dict[str, ClaudeAgentOptions] = {}
 
     async def run(
         self,
@@ -139,6 +146,27 @@ class AgentOrchestrator:
             runtime.id,
         )
 
+    async def _get_or_create_client(self, product_id: str, options: ClaudeAgentOptions) -> ClaudeSDKClient:
+        """Get an existing client or create a new one for a product.
+
+        The client subprocess stays alive between messages. Since query()
+        doesn't support updating the system prompt, we create the client
+        with the STATIC prompt (instructions + product + doc map) and pass
+        the dynamic search context as part of the user message.
+
+        Only recreates when: first message, or client died from error.
+        """
+        existing = self._clients.get(product_id)
+        if existing is not None:
+            print(f"[AGENT] Reusing existing SDK client for {product_id}", flush=True)
+            return existing
+
+        client = ClaudeSDKClient(options=options)
+        await client.connect()
+        self._clients[product_id] = client
+        print(f"[AGENT] Created new SDK client for {product_id}", flush=True)
+        return client
+
     async def _run_with_agent_sdk(
         self,
         user_message: str,
@@ -149,52 +177,55 @@ class AgentOrchestrator:
         """Run via the Claude Agent SDK."""
         self.__init_stream_state()
 
-        if images:
-            prompt: Any = self._build_multimodal_prompt(user_message, images)
+        # Static prompt (cached in client): instructions + product + doc map
+        from app.agent.prompts import _build_static_prompt, build_initial_search_context
+        static_prompt = _build_static_prompt(runtime.id)
+
+        # Dynamic search context (changes per query, prepended to user message)
+        search_context = build_initial_search_context(runtime.id, user_message)
+        if search_context:
+            augmented_prompt = f"{search_context}\n\n---\nUser question: {user_message}"
         else:
-            prompt = user_message
+            augmented_prompt = user_message
 
-        system_prompt = build_system_prompt(
-            product_id=runtime.id,
-            user_message=user_message,
-        )
-        print(f"\n{'='*60}", flush=True)
-        print(f"[AGENT] System prompt ({len(system_prompt)} chars):", flush=True)
-        print(f"{'='*60}", flush=True)
-        print(system_prompt, flush=True)
-        print(f"{'='*60}\n", flush=True)
+        print(f"\n[AGENT] Static prompt: {len(static_prompt)} chars, search context: {len(search_context)} chars", flush=True)
 
+        # Build options with STATIC prompt only (for client creation/reuse)
         options = ClaudeAgentOptions(
             model=self._model,
-            system_prompt=system_prompt,
+            system_prompt=static_prompt,
             mcp_servers={MCP_SERVER_NAME: self._mcp_server},
             max_turns=MAX_AGENT_TURNS,
             permission_mode="bypassPermissions",
             include_partial_messages=True,
             allowed_tools=[
-                "Read",  # Built-in: read files including page images for vision
-                "WebSearch",  # Built-in: web search for external knowledge
-                f"mcp__{MCP_SERVER_NAME}__*",  # All our custom tools
+                "Read",
+                "WebSearch",
+                f"mcp__{MCP_SERVER_NAME}__*",
             ],
-            # Pass API key explicitly so the bundled CLI uses pay-per-token API
-            # instead of falling back to the Claude.ai web account (which has usage caps).
             env={"ANTHROPIC_API_KEY": settings.anthropic_api_key} if settings.anthropic_api_key else {},
         )
 
         if session.sdk_session_id:
             options.resume = session.sdk_session_id
 
+        # Use augmented prompt (search context + user question) as the message
+        if images:
+            final_prompt: Any = self._build_multimodal_prompt(augmented_prompt, images)
+        else:
+            final_prompt = augmented_prompt
+
         clarification_requested = False
         has_error = False
 
         try:
             with use_product_runtime(runtime):
-                async with ClaudeSDKClient(options=options) as client:
-                    await client.query(
-                        prompt=prompt,
-                        session_id=session.sdk_session_id or session.id,
-                    )
-                    async for event in client.receive_response():
+                client = await self._get_or_create_client(runtime.id, options)
+                await client.query(
+                    prompt=final_prompt,
+                    session_id=session.sdk_session_id or session.id,
+                )
+                async for event in client.receive_response():
                         if isinstance(event, StreamEvent):
                             for sse in self._map_stream_event(event, session, runtime):
                                 if sse["event"] == "clarification":
@@ -241,6 +272,8 @@ class AgentOrchestrator:
             return
         except Exception:
             logger.exception("Agent SDK runtime error")
+            # Client may be dead, remove so next request creates a fresh one
+            self._clients.pop(runtime.id, None)
             if not has_error:
                 yield {
                     "event": "error",

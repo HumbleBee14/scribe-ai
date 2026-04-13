@@ -486,8 +486,11 @@ multimodal-prox-challenge/
 
 1. **Generic platform** -- not hardcoded to one product. Upload any manual and it works.
 2. **Vision-guided OCR** -- Claude Vision reads each page as a human would, not just text extraction.
-3. **Hybrid retrieval** -- FTS5 keyword + semantic vector search with qualification filtering.
+3. **Hybrid retrieval** -- FTS5 keyword + semantic vector search with cross-encoder reranking and qualification filtering.
 4. **Document map architecture** -- agent gets a full index of the manual, decides what to read.
 5. **Agent autonomy** -- we provide context and tools, the agent reasons about what to do.
-6. **Production features** -- voice mode, dark theme, chat persistence, user memories, manual preview.
-7. **Zero infrastructure** -- SQLite for everything, single `make` command to run.
+6. **Multi-page cross-referencing** -- the agent gathers information from multiple pages and sections before answering complex questions. For a setup walkthrough, it independently fetches polarity, settings, safety, and connections pages, then synthesizes a complete answer. It also retries searches with rephrased terms if the first attempt returns weak results.
+7. **Clickable source citations** -- every page number in the agent's response is clickable and opens the actual manual page in the source viewer. Comma-separated lists like "pages 3, 4, 5, 7, 14-17" are individually linked, not just the first number.
+8. **Extensible per-product instructions** -- each product workspace supports an optional custom system prompt that appends to the base instructions. The core rules (accuracy, citations, web search policy, artifact styling) are always enforced. Custom instructions extend behavior without overriding safety.
+9. **Production features** -- voice mode, dark theme, chat persistence, user memories, manual preview.
+10. **Zero infrastructure** -- SQLite for everything, single `make` command to run.
