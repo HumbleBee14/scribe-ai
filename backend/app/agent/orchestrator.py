@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -15,7 +16,12 @@ from claude_agent_sdk import (
     StreamEvent,
 )
 
-from app.agent.prompts import build_system_prompt
+from app.agent.prompts import (
+    _build_memories_section,
+    _build_static_prompt,
+    build_initial_search_context,
+    build_system_prompt,
+)
 from app.agent.tools import MCP_SERVER_NAME, create_knowledge_mcp_server
 from app.core.config import settings
 from app.packs.models import ProductRuntime
@@ -175,20 +181,43 @@ class AgentOrchestrator:
         images: list[dict[str, str]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Run via the Claude Agent SDK."""
+        t0 = time.time()
+        def _ts(label: str) -> None:
+            print(f"[TIMING] {label}: {time.time() - t0:.3f}s", flush=True)
+
         self.__init_stream_state()
+        _ts("STEP 1 - init stream state")
 
         # Static prompt (cached in client): instructions + product + doc map
-        from app.agent.prompts import _build_static_prompt, build_initial_search_context
         static_prompt = _build_static_prompt(runtime.id)
+
+        memories_section = _build_memories_section(runtime.id)
+        
+        if memories_section:
+            static_prompt = f"{static_prompt}\n{memories_section}"
+        _ts("STEP 2 - build static prompt + memories")
 
         # Dynamic search context (changes per query, prepended to user message)
         search_context = build_initial_search_context(runtime.id, user_message)
+        _ts("STEP 3 - build search context (hybrid search + cross-encoder + DB)")
+
         if search_context:
             augmented_prompt = f"{search_context}\n\n---\nUser question: {user_message}"
         else:
             augmented_prompt = user_message
 
-        print(f"\n[AGENT] Static prompt: {len(static_prompt)} chars, search context: {len(search_context)} chars", flush=True)
+        print(f"\n[AGENT] Static prompt + memories: {len(static_prompt)} chars, search context: {len(search_context)} chars", flush=True)
+        print(f"\n{'='*60}", flush=True)
+        print(f"[SYSTEM PROMPT] ({len(static_prompt)} chars)", flush=True)
+        print(f"{'='*60}", flush=True)
+        print(static_prompt, flush=True)
+        print(f"{'='*60}\n", flush=True)
+        if search_context:
+            print(f"{'='*60}", flush=True)
+            print(f"[SEARCH CONTEXT] ({len(search_context)} chars)", flush=True)
+            print(f"{'='*60}", flush=True)
+            print(search_context, flush=True)
+            print(f"{'='*60}\n", flush=True)
 
         # Build options with STATIC prompt only (for client creation/reuse)
         options = ClaudeAgentOptions(
@@ -206,6 +235,7 @@ class AgentOrchestrator:
             ],
             env={"ANTHROPIC_API_KEY": settings.anthropic_api_key} if settings.anthropic_api_key else {},
         )
+        _ts("STEP 4 - build options")
 
         if session.sdk_session_id:
             options.resume = session.sdk_session_id
@@ -218,15 +248,24 @@ class AgentOrchestrator:
 
         clarification_requested = False
         has_error = False
+        first_token_logged = False
 
         try:
             with use_product_runtime(runtime):
                 client = await self._get_or_create_client(runtime.id, options)
+                _ts("STEP 5 - get/create SDK client")
+
                 await client.query(
                     prompt=final_prompt,
                     session_id=session.sdk_session_id or session.id,
                 )
+                _ts("STEP 6 - client.query() sent")
+
                 async for event in client.receive_response():
+                        if not first_token_logged:
+                            _ts("STEP 7 - FIRST EVENT received from SDK")
+                            first_token_logged = True
+
                         if isinstance(event, StreamEvent):
                             for sse in self._map_stream_event(event, session, runtime):
                                 if sse["event"] == "clarification":
@@ -317,6 +356,10 @@ class AgentOrchestrator:
         # Track in-progress tool blocks by index
         # {block_index: {"name": "tool_name", "input_json": ""}}
         self._active_tool_blocks: dict[int, dict[str, str]] = {}
+        # Reset timing flags
+        self._first_text_logged = False
+        self._first_thinking_logged = False
+        self._stream_start = time.time()
 
     def _map_stream_event(
         self,
@@ -332,6 +375,12 @@ class AgentOrchestrator:
         evt = event.event
         evt_type = evt.get("type", "")
         results: list[dict[str, Any]] = []
+
+        # Log first text/thinking token timing
+        if not hasattr(self, '_first_text_logged'):
+            self._first_text_logged = False
+            self._first_thinking_logged = False
+            self._stream_start = time.time()
 
         if evt_type == "content_block_start":
             cb = evt.get("content_block", {})
@@ -368,6 +417,9 @@ class AgentOrchestrator:
             if delta_type == "text_delta":
                 text = delta.get("text", "")
                 if text:
+                    if not self._first_text_logged:
+                        print(f"[TIMING] FIRST TEXT TOKEN: {time.time() - self._stream_start:.3f}s from stream start", flush=True)
+                        self._first_text_logged = True
                     results.append({
                         "event": "text_delta",
                         "data": {"content": text},
@@ -376,6 +428,9 @@ class AgentOrchestrator:
             elif delta_type == "thinking_delta":
                 thinking_text = delta.get("thinking", "")
                 if thinking_text:
+                    if not self._first_thinking_logged:
+                        print(f"[TIMING] FIRST THINKING TOKEN: {time.time() - self._stream_start:.3f}s from stream start", flush=True)
+                        self._first_thinking_logged = True
                     results.append({
                         "event": "thinking_delta",
                         "data": {"content": thinking_text},

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 import logging
 import uuid
 from collections.abc import AsyncIterator
@@ -73,8 +74,15 @@ class ChatRequest(BaseModel):
 
 async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
     """Generate SSE events from the agent orchestrator."""
+    req_start = time.time()
+    def _ts(label: str) -> None:
+        print(f"[TIMING] {label}: {time.time() - req_start:.3f}s", flush=True)
+
+    _ts("REQUEST RECEIVED")
+
     orchestrator = _get_orchestrator()
     runtime = get_product_registry().require_product(request.product_id)
+    _ts("API STEP 1 - get orchestrator + product")
 
     # Resolve or create conversation
     conversation_id = request.conversation_id
@@ -83,6 +91,7 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
         conversation_id = conv["id"]
         # Send conversation_id to frontend so it can update the URL
         yield _sse_event("conversation_created", {"conversation_id": conversation_id})
+    _ts("API STEP 2 - resolve conversation")
 
     # Save user images to disk, store paths (not base64) in DB
     image_paths: list[str] = []
@@ -95,6 +104,7 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
     if image_paths:
         user_content["images"] = image_paths
     db.add_message(conversation_id, "user", user_content)
+    _ts("API STEP 3 - save user message to DB")
 
     # Auto-set conversation title from first user message
     conv_data = db.get_conversation(conversation_id)
@@ -103,6 +113,7 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
         if len(request.message) > 80:
             title = title.rsplit(" ", 1)[0] + "..."
         db.update_conversation_title(conversation_id, title)
+    _ts("API STEP 4 - set conversation title")
 
     # Get or create session (for Agent SDK multi-turn resume)
     session = session_manager.get_or_create(
@@ -110,17 +121,18 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
         product_id=runtime.id,
         product_name=runtime.product_name,
     )
+    _ts("API STEP 5 - get/create session")
 
     # Convert typed images to dicts for orchestrator
     images_raw: list[dict[str, str]] | None = None
     if request.images:
         images_raw = [img.model_dump() for img in request.images]
 
+    _ts("API STEP 6 - entering orchestrator.run()")
+
     # Run agent and stream events.
     # Build a blocks array (same structure the frontend uses) to preserve
     # the interleaved order of text, images, and artifacts for DB persistence.
-    import time
-    req_start = time.time()
     text_chars = 0
     blocks: list[dict] = []
     current_text: list[str] = []

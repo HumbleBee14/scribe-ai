@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 import logging
 
 from app.agent.tools.calculator import safe_calculate
@@ -346,10 +347,11 @@ def _hybrid_search(product_id: str, query: str, limit: int = 8) -> list[dict]:
     return ranked[:limit]
 
 
-def _log_result(name: str, result: dict) -> dict:
+def _log_result(name: str, result: dict, _start: float | None = None) -> dict:
     """Log tool result summary and return it."""
+    elapsed = f" ({time.time() - _start:.3f}s)" if _start else ""
     if "error" in result:
-        print(f"[TOOL] {name} -> ERROR: {result['error']}", flush=True)
+        print(f"[TOOL] {name} -> ERROR: {result['error']}{elapsed}", flush=True)
     elif name == "search_manual":
         hits = result.get("results", [])
         pages = [(r["source_id"], r["page"]) for r in hits[:5]]
@@ -369,7 +371,15 @@ def _log_result(name: str, result: dict) -> dict:
 
 def execute_tool(name: str, params: dict) -> dict:
     """Execute a tool by name with given parameters."""
+    tool_start = time.time()
     print(f"\n[TOOL CALL] {name} args={json.dumps(params, default=str)}", flush=True)
+    result = _execute_tool_inner(name, params)
+    print(f"[TOOL DONE] {name}: {time.time() - tool_start:.3f}s", flush=True)
+    return result
+
+
+def _execute_tool_inner(name: str, params: dict) -> dict:
+    """Internal tool executor."""
 
     runtime = get_active_product()
     product_id = runtime.id
