@@ -1,9 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Expand, FileImage } from "lucide-react";
-import { getManualPageImageUrl } from "@/lib/api";
+import { Brain, Expand, FileImage, Plus, Trash2 } from "lucide-react";
+import {
+  addMemory,
+  deleteMemory,
+  getManualPageImageUrl,
+  listMemories,
+  type Memory,
+} from "@/lib/api";
 import { ArtifactModal } from "@/components/artifacts/artifact-modal";
 import { DialogShell } from "@/components/ui/dialog-shell";
 import type { ArtifactEvent, SelectedSourcePage } from "@/types/events";
@@ -16,7 +22,11 @@ interface Props {
 
 export function SourceViewer({ productId, selectedSource, artifacts }: Props) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+      <MemoriesSection productId={productId} />
+
+      <hr className="border-gray-200 dark:border-neutral-700" />
+
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
           Artifacts
@@ -30,6 +40,8 @@ export function SourceViewer({ productId, selectedSource, artifacts }: Props) {
         )}
       </div>
 
+      <hr className="border-gray-200 dark:border-neutral-700" />
+
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
           Source Viewer
@@ -39,13 +51,15 @@ export function SourceViewer({ productId, selectedSource, artifacts }: Props) {
         </p>
       </div>
 
-      {selectedSource ? (
-        <SourceCard productId={productId} source={selectedSource} />
-      ) : (
-        <div className="rounded-xl border border-dashed border-gray-200 dark:border-neutral-700 bg-gray-50/40 dark:bg-neutral-900/40 p-4 text-sm text-gray-400 dark:text-neutral-400">
-          No source selected yet.
-        </div>
-      )}
+      <div className="max-h-72 overflow-y-auto">
+        {selectedSource ? (
+          <SourceCard productId={productId} source={selectedSource} />
+        ) : (
+          <div className="rounded-xl border border-dashed border-gray-200 dark:border-neutral-700 bg-gray-50/40 dark:bg-neutral-900/40 p-4 text-sm text-gray-400 dark:text-neutral-400">
+            No source selected yet.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -201,7 +215,7 @@ function SidebarArtifactList({ artifacts }: { artifacts: ArtifactEvent["data"][]
 
   return (
     <>
-      <div className="mt-3 space-y-3">
+      <div className="mt-3 max-h-72 space-y-3 overflow-y-auto">
         {artifacts.map((artifact) => (
           <button
             key={artifact.id}
@@ -235,5 +249,109 @@ function SidebarArtifactList({ artifacts }: { artifacts: ArtifactEvent["data"][]
         />
       )}
     </>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// MemoriesSection: per-product preferences with add/delete
+// ---------------------------------------------------------------------------
+
+function MemoriesSection({ productId }: { productId: string }) {
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [maxMemories, setMaxMemories] = useState(5);
+  const [inputValue, setInputValue] = useState("");
+  const [adding, setAdding] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const reload = useCallback(async () => {
+    const data = await listMemories(productId);
+    setMemories(data.memories);
+    setMaxMemories(data.max);
+  }, [productId]);
+
+  // Reload when agent updates memory via tool call
+  useEffect(() => {
+    const handler = () => void reload();
+    window.addEventListener("memories-changed", handler);
+    return () => window.removeEventListener("memories-changed", handler);
+  }, [reload]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const handleAdd = async () => {
+    const text = inputValue.trim();
+    if (!text) return;
+    setAdding(true);
+    const result = await addMemory(productId, text);
+    if (result) {
+      setMemories((prev) => [...prev, result]);
+      setInputValue("");
+    }
+    setAdding(false);
+    inputRef.current?.focus();
+  };
+
+  const handleDelete = async (id: number) => {
+    await deleteMemory(id);
+    setMemories((prev) => prev.filter((m) => m.id !== id));
+  };
+
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
+        <Brain suppressHydrationWarning className="mr-1 inline h-3.5 w-3.5" />
+        Preferences
+      </h3>
+
+      {memories.length === 0 ? (
+        <p className="mt-2 text-xs text-gray-400 dark:text-neutral-400">
+          The assistant will remember your setup preferences here.
+        </p>
+      ) : (
+        <div className="mt-2 space-y-1.5">
+          {memories.map((m) => (
+            <div
+              key={m.id}
+              className="group flex items-start gap-1.5 rounded-lg bg-gray-50 dark:bg-neutral-800/60 px-2.5 py-1.5 text-xs text-gray-700 dark:text-neutral-300"
+            >
+              <span className="flex-1 leading-relaxed">{m.content}</span>
+              <button
+                type="button"
+                onClick={() => void handleDelete(m.id)}
+                className="mt-0.5 hidden shrink-0 rounded p-0.5 text-gray-400 hover:text-red-500 dark:text-neutral-500 dark:hover:text-red-400 group-hover:block"
+                title="Remove"
+              >
+                <Trash2 suppressHydrationWarning className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {memories.length < maxMemories && (
+        <div className="mt-2 flex items-center gap-1.5">
+          <input
+            ref={inputRef}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void handleAdd(); }}
+            placeholder="Add a preference..."
+            className="min-w-0 flex-1 rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 py-1 text-xs text-gray-700 dark:text-neutral-200 placeholder:text-gray-400 dark:placeholder:text-neutral-500 outline-none focus:border-orange-400"
+          />
+          <button
+            type="button"
+            onClick={() => void handleAdd()}
+            disabled={adding || !inputValue.trim()}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-40 transition-colors"
+            title="Add"
+          >
+            <Plus suppressHydrationWarning className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

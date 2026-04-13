@@ -156,6 +156,14 @@ def init_db() -> None:
 
         CREATE INDEX IF NOT EXISTS idx_messages_conversation
             ON messages(conversation_id, id);
+
+        CREATE TABLE IF NOT EXISTS memories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            content TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'user',
+            created_at TEXT NOT NULL
+        );
     """)
 
     # FTS5 virtual table for full-text search across page content
@@ -574,7 +582,8 @@ def search_pages_fts(product_id: str, query: str, limit: int = 10) -> list[dict[
     conn = _get_conn()
     # Sanitize and convert to OR-separated tokens
     # Remove FTS5 special characters that break queries
-    clean = re.sub(r'["\'\(\)\*\+\-\:\;\!\?\.\,\[\]\{\}]', ' ', query)
+    # Keep only alphanumeric words -- strip ALL special chars, emojis, unicode symbols
+    clean = re.sub(r'[^a-zA-Z0-9\s]', ' ', query)
     tokens = [t.strip() for t in clean.split() if t.strip() and len(t.strip()) > 1]
     if not tokens:
         return []
@@ -820,5 +829,48 @@ def update_conversation_title(conversation_id: str, title: str) -> None:
 def delete_conversation(conversation_id: str) -> bool:
     conn = _get_conn()
     cursor = conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+    conn.commit()
+    return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Memories (per-product preferences, max 5)
+# ---------------------------------------------------------------------------
+
+MAX_MEMORIES_PER_PRODUCT = 6
+
+
+def get_memories(product_id: str) -> list[dict[str, Any]]:
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT id, content, source, created_at FROM memories WHERE product_id = ? ORDER BY id",
+        (product_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_memory(product_id: str, content: str, source: str = "user") -> dict[str, Any] | None:
+    conn = _get_conn()
+    # If at limit, remove the oldest memory to make room
+    count = conn.execute(
+        "SELECT COUNT(*) as cnt FROM memories WHERE product_id = ?", (product_id,)
+    ).fetchone()["cnt"]
+    if count >= MAX_MEMORIES_PER_PRODUCT:
+        conn.execute(
+            "DELETE FROM memories WHERE id = (SELECT id FROM memories WHERE product_id = ? ORDER BY id LIMIT 1)",
+            (product_id,),
+        )
+    now = _now()
+    cursor = conn.execute(
+        "INSERT INTO memories (product_id, content, source, created_at) VALUES (?, ?, ?, ?)",
+        (product_id, content.strip(), source, now),
+    )
+    conn.commit()
+    return {"id": cursor.lastrowid, "content": content.strip(), "source": source, "created_at": now}
+
+
+def delete_memory(memory_id: int) -> bool:
+    conn = _get_conn()
+    cursor = conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
     conn.commit()
     return cursor.rowcount > 0
