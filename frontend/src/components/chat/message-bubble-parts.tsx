@@ -22,10 +22,10 @@ import type {
   SelectedSourcePage,
 } from "@/types/events";
 
-// Matches "pages 3, 4, 5, 7, 14-17" or "page 3" or "pages 3-5"
-// Captures the full list including commas, ranges, and spaces
+// Matches "pages 3, 4, 5, 7, 14-17" or "page 3" or "pages 3-5" or "pages 19 & 23" or "pages 1 and 5"
+// Captures the full list including commas, ampersands, "and", ranges, and spaces
 const PAGE_LIST_REGEX =
-  /\b(?:manual\s*,?\s*)?(?:pages?\s*\.?\s*)(\d{1,3}(?:\s*[-\u2013]\s*\d{1,3})?(?:\s*,\s*\d{1,3}(?:\s*[-\u2013]\s*\d{1,3})?)*)\b/gi;
+  /\b(?:manual\s*,?\s*)?(?:pages?\s*\.?\s*)(\d{1,3}(?:\s*[-\u2013]\s*\d{1,3})?(?:\s*(?:,|&|and)\s*\d{1,3}(?:\s*[-\u2013]\s*\d{1,3})?)*)\b/gi;
 // Matches individual page numbers or ranges within a matched list
 const PAGE_NUM_REGEX = /(\d{1,3})(?:\s*[-\u2013]\s*(\d{1,3}))?/g;
 const FOLLOWUPS_BLOCK_REGEX = /```followups\n([\s\S]*?)```/gi;
