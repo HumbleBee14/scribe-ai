@@ -10,6 +10,7 @@ import base64
 import json
 import logging
 
+from app.agent.tools.calculator import safe_calculate
 from app.core import database as db
 from app.packs.registry import get_active_product
 
@@ -59,8 +60,9 @@ TOOL_DEFINITIONS: list[dict] = [
             "Use after search_manual identifies relevant pages, or when the document map "
             "in the system prompt tells you which pages cover a topic. "
             "You can request a single page or multiple pages at once. "
-            "Examples: get_page_text('owner-manual', [7]) for specs page, "
-            "get_page_text('owner-manual', [10, 11, 12]) for MIG setup steps across pages."
+            "Maximum 5 pages per call. If you need more, make multiple calls. "
+            "Examples: get_page_text('owner-manual', [7]) for one page, "
+            "get_page_text('owner-manual', [10, 11, 12]) for a range."
         ),
         "input_schema": {
             "type": "object",
@@ -125,6 +127,27 @@ TOOL_DEFINITIONS: list[dict] = [
                 },
             },
             "required": ["question"],
+        },
+    },
+    {
+        "name": "calculate",
+        "description": (
+            "Evaluate a mathematical expression and return the result. "
+            "Operators: +, -, *, /, //, %, ** (power). "
+            "Functions: sqrt, abs, round, min, max, sin, cos, tan, log, log10, pow, ceil, floor. "
+            "Constants: pi, e. "
+            "Examples: '175 * 0.30', 'sqrt(144)', '(240 * 30) / 100', 'round(3.14159, 2)', "
+            "'ceil(7.3)', 'log10(1000)', 'sin(pi / 2)', '2 ** 10'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "expression": {
+                    "type": "string",
+                    "description": "Math expression to evaluate. Example: '175 * 0.30'",
+                },
+            },
+            "required": ["expression"],
         },
     },
     {
@@ -299,6 +322,9 @@ def execute_tool(name: str, params: dict) -> dict:
     if name == "get_page_text":
         source_id = params.get("source_id", "")
         pages = params.get("pages", [])
+        if len(pages) > 5:
+            pages = pages[:5]
+            print(f"[TOOL] get_page_text: capped to 5 pages (requested {len(params.get('pages', []))})", flush=True)
         results = db.get_page_detailed_text(product_id, source_id, pages)
         if not results:
             return _log_result(name, {"error": "No page content found."})
@@ -340,6 +366,10 @@ def execute_tool(name: str, params: dict) -> dict:
             "question": params.get("question", ""),
             "options": params.get("options"),
         })
+
+    if name == "calculate":
+        expression = params.get("expression", "")
+        return _log_result(name, safe_calculate(expression))
 
     if name == "update_memory":
         action = params.get("action", "add")

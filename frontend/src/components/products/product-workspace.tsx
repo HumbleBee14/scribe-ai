@@ -20,6 +20,7 @@ import { SourceViewer } from "@/components/evidence/source-viewer";
 import { HistorySidebar } from "@/components/layout/history-sidebar";
 import { MobileContextPanel } from "@/components/layout/mobile-context-panel";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { ManualPreviewDialog } from "@/components/products/manual-preview-dialog";
 import type { SelectedSourcePage } from "@/types/events";
 
 interface Props {
@@ -35,6 +36,7 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
   const [selectedSource, setSelectedSource] = useState<SelectedSourcePage | null>(null);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
+  const [manualPreviewOpen, setManualPreviewOpen] = useState(false);
   const [productsLoadError, setProductsLoadError] = useState<string | null>(null);
   const [productsLoading, setProductsLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -395,10 +397,14 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
                 {activeProduct.description || "Local-first multimodal manual assistant"}
               </p>
               <div className="mt-2.5 flex items-center text-[11px] text-gray-500 dark:text-neutral-500">
-                <span>
+                <button
+                  type="button"
+                  onClick={() => setManualPreviewOpen(true)}
+                  className="hover:text-orange-500 dark:hover:text-orange-400 transition-colors underline underline-offset-2"
+                >
                   {activeProduct.document_count}{" "}
                   {activeProduct.document_count === 1 ? "manual" : "manuals"}
-                </span>
+                </button>
                 <span className="mx-2 text-gray-300 dark:text-neutral-600" aria-hidden>
                   ·
                 </span>
@@ -437,6 +443,13 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
         ingestionLabel={ingestionLabel}
         selectedSource={selectedSource}
         artifacts={artifacts}
+      />
+
+      <ManualPreviewDialog
+        open={manualPreviewOpen}
+        onClose={() => setManualPreviewOpen(false)}
+        productId={activeProduct.id}
+        sources={activeProduct.sources}
       />
     </div>
   );

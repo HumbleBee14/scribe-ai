@@ -48,6 +48,9 @@ export function HTMLViewer({ code, title }: Props) {
       background: #fff;
       color: #111;
     }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+    th { background: #f0f0f0; font-weight: 600; border-color: #bbb; }
   </style>
 </head>
 <body>

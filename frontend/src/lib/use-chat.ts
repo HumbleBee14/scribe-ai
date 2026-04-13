@@ -17,7 +17,7 @@ function nextId(): string {
   return `msg-${++messageCounter}-${Date.now()}`;
 }
 
-const REQUEST_TIMEOUT_MS = 90_000; // 90 seconds
+const REQUEST_TIMEOUT_MS = 300_000; // 5 minutes - agent may need multiple tool calls + large artifact generation
 
 /** Mark all pending tool calls (ok === undefined) as completed. */
 function resolvePendingToolCalls(msg: ChatMessage): ChatMessage {
