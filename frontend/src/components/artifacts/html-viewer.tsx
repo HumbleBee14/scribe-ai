@@ -24,7 +24,7 @@ export function HTMLViewer({ code, title }: Props) {
         event.data.type === "resize" &&
         typeof event.data.height === "number"
       ) {
-        setHeight(Math.min(event.data.height + 20, 500));
+        setHeight(Math.min(event.data.height + 20, 800));
       }
     };
 
@@ -49,8 +49,8 @@ export function HTMLViewer({ code, title }: Props) {
       color: #111;
     }
     table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
-    th { background: #f0f0f0; font-weight: 600; border-color: #bbb; }
+    th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+    th { font-weight: 600; }
   </style>
 </head>
 <body>

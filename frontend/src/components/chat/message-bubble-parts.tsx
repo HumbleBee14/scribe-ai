@@ -22,8 +22,12 @@ import type {
   SelectedSourcePage,
 } from "@/types/events";
 
-const PAGE_REF_REGEX =
-  /\b(?:manual\s+)?(?:pages?\s*\.?\s*)(\d{1,3})(?:\s*[-\u2013]\s*(\d{1,3}))?\b/gi;
+// Matches "pages 3, 4, 5, 7, 14-17" or "page 3" or "pages 3-5"
+// Captures the full list including commas, ranges, and spaces
+const PAGE_LIST_REGEX =
+  /\b(?:manual\s*,?\s*)?(?:pages?\s*\.?\s*)(\d{1,3}(?:\s*[-\u2013]\s*\d{1,3})?(?:\s*,\s*\d{1,3}(?:\s*[-\u2013]\s*\d{1,3})?)*)\b/gi;
+// Matches individual page numbers or ranges within a matched list
+const PAGE_NUM_REGEX = /(\d{1,3})(?:\s*[-\u2013]\s*(\d{1,3}))?/g;
 const FOLLOWUPS_BLOCK_REGEX = /```followups\n([\s\S]*?)```/gi;
 
 function processChildren(
@@ -39,6 +43,31 @@ function processChildren(
   return children;
 }
 
+function makePageButton(
+  page: number,
+  label: string,
+  key: string,
+  onSelect: (source: SelectedSourcePage) => void,
+  pages?: number[],
+) {
+  return (
+    <button
+      key={key}
+      type="button"
+      onClick={() =>
+        onSelect({
+          page,
+          pages: pages && pages.length > 1 ? pages : undefined,
+          title: pages && pages.length > 1 ? `Pages ${pages[0]}-${pages[pages.length - 1]}` : `Page ${page}`,
+        })
+      }
+      className="inline text-orange-500 hover:text-orange-600 underline underline-offset-2 cursor-pointer"
+    >
+      {label}
+    </button>
+  );
+}
+
 function linkifyPageRefs(
   children: React.ReactNode,
   onSelect?: (source: SelectedSourcePage) => void,
@@ -48,40 +77,48 @@ function linkifyPageRefs(
     const parts: React.ReactNode[] = [];
     let lastIdx = 0;
     let match: RegExpExecArray | null;
-    const regex = new RegExp(PAGE_REF_REGEX.source, "gi");
+    const regex = new RegExp(PAGE_LIST_REGEX.source, "gi");
 
     while ((match = regex.exec(text)) !== null) {
       if (match.index > lastIdx) {
         parts.push(text.slice(lastIdx, match.index));
       }
-      const startPage = parseInt(match[1], 10);
-      const endPage = match[2] ? parseInt(match[2], 10) : startPage;
+
+      // "pages " prefix part (everything before the first digit)
       const fullMatch = match[0];
-      if (startPage >= 1) {
-        const allPages: number[] = [];
-        for (let page = startPage; page <= Math.min(endPage, startPage + 20); page++) {
-          allPages.push(page);
+      const numListStr = match[1];
+      const prefix = fullMatch.slice(0, fullMatch.indexOf(numListStr));
+      parts.push(prefix);
+
+      // Now linkify each page number/range within the list
+      const numRegex = new RegExp(PAGE_NUM_REGEX.source, "g");
+      let numMatch: RegExpExecArray | null;
+      let numLastIdx = 0;
+
+      while ((numMatch = numRegex.exec(numListStr)) !== null) {
+        // Push any separator (comma, space) between numbers
+        if (numMatch.index > numLastIdx) {
+          parts.push(numListStr.slice(numLastIdx, numMatch.index));
         }
-        parts.push(
-          <button
-            key={`pref-${match.index}`}
-            type="button"
-            onClick={() =>
-              onSelect({
-                page: startPage,
-                pages: allPages.length > 1 ? allPages : undefined,
-                title:
-                  allPages.length > 1 ? `Pages ${startPage}-${endPage}` : `Page ${startPage}`,
-              })
-            }
-            className="inline text-orange-500 hover:text-orange-600 underline underline-offset-2 cursor-pointer"
-          >
-            {fullMatch}
-          </button>
-        );
-      } else {
-        parts.push(fullMatch);
+        const startPage = parseInt(numMatch[1], 10);
+        const endPage = numMatch[2] ? parseInt(numMatch[2], 10) : startPage;
+        if (startPage >= 1) {
+          const allPages: number[] = [];
+          for (let p = startPage; p <= Math.min(endPage, startPage + 20); p++) {
+            allPages.push(p);
+          }
+          parts.push(
+            makePageButton(startPage, numMatch[0], `pref-${match.index}-${numMatch.index}`, onSelect, allPages)
+          );
+        } else {
+          parts.push(numMatch[0]);
+        }
+        numLastIdx = numRegex.lastIndex;
       }
+      if (numLastIdx < numListStr.length) {
+        parts.push(numListStr.slice(numLastIdx));
+      }
+
       lastIdx = regex.lastIndex;
     }
 

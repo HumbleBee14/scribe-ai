@@ -47,6 +47,11 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
     [products, activeProductId]
   );
 
+  // Update page title with product name
+  useEffect(() => {
+    document.title = activeProduct ? `Prox - ${activeProduct.name}` : "Prox";
+  }, [activeProduct]);
+
   const { messages, isStreaming, newConversationId, sendMessage, stopStreaming, clearMessages } =
     useChat(activeProductId, conversationId);
 
@@ -161,6 +166,11 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: messages.length > 1 ? "smooth" : "auto" });
   }, [messages]);
+
+  // Scroll to bottom on session/conversation change or page load
+  useEffect(() => {
+    setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "auto" }), 100);
+  }, [conversationId]);
 
   // Auto-dismiss warning after 5 seconds
   useEffect(() => {

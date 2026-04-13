@@ -231,7 +231,7 @@ export function useChat(productId: string, conversationId: string | null) {
                   );
                   if (idx >= 0) {
                     const copy = [...calls];
-                    copy[idx] = { ...copy[idx], ok: data.ok as boolean };
+                    copy[idx] = { ...copy[idx], ok: data.ok as boolean, label: (data.label as string) || copy[idx].label };
                     msg.toolCalls = copy;
                   }
                   // Notify sidebar to refresh memories

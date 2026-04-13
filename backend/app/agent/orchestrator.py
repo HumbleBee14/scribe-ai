@@ -29,6 +29,9 @@ _TOOL_LABELS: dict[str, str] = {
     "get_page_text": "Reading page content",
     "get_page_image": "Loading page image",
     "clarify_question": "Asking for clarification",
+    "calculate": "Calculating",
+    "update_memory": "Updating memory",
+    "WebSearch": "Searching the web",
     "Read": "Reading file",
 }
 
@@ -41,9 +44,54 @@ def _strip_mcp_prefix(tool_name: str) -> str:
     return tool_name
 
 
-def _get_tool_label(tool_name: str) -> str:
+def _get_tool_label(tool_name: str, tool_input: dict | None = None) -> str:
+    """Build a human-readable label for a tool call.
+
+    When tool_input is provided (at tool_end), include context like
+    page numbers or search queries. Without input (at tool_start),
+    return the static label.
+    """
     clean = _strip_mcp_prefix(tool_name)
-    return _TOOL_LABELS.get(clean, clean)
+    base = _TOOL_LABELS.get(clean, clean)
+
+    if not tool_input:
+        return base
+
+    if clean == "search_manual":
+        query = tool_input.get("query", "")
+        if query:
+            short = query[:50] + ("..." if len(query) > 50 else "")
+            return f"Searched for '{short}'"
+
+    if clean == "get_page_text":
+        pages = tool_input.get("pages", [])
+        if pages:
+            if len(pages) == 1:
+                return f"Read page {pages[0]}"
+            return f"Read pages {', '.join(str(p) for p in pages)}"
+
+    if clean == "get_page_image":
+        page = tool_input.get("page")
+        if page:
+            return f"Loaded page {page} image"
+
+    if clean == "calculate":
+        expr = tool_input.get("expression", "")
+        if expr:
+            short = expr[:40] + ("..." if len(expr) > 40 else "")
+            return f"Calculated: {short}"
+
+    if clean == "update_memory":
+        action = tool_input.get("action", "add")
+        return "Saved to memory" if action == "add" else "Removed from memory"
+
+    if clean == "WebSearch":
+        query = tool_input.get("query", "")
+        if query:
+            short = query[:50] + ("..." if len(query) > 50 else "")
+            return f"Web search: '{short}'"
+
+    return base
 
 
 def _coerce_page_number(value: Any) -> int | None:
@@ -419,7 +467,7 @@ class AgentOrchestrator:
             "event": "tool_end",
             "data": {
                 "tool": tool_name,
-                "label": _get_tool_label(tool_name),
+                "label": _get_tool_label(tool_name, tool_input),
                 "ok": ok,
             },
         })

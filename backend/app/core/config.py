@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     max_documents_per_product: int = 10
 
     # Feature flags
-    enable_vector_search: bool = False
+    enable_cross_encoder_rerank: bool = True
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),

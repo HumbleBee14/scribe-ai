@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Prox — Manual workspaces",
+  title: "Prox",
   description:
     "Ask your product manual. Your live guide for accurate, source-backed answers.",
 };

@@ -179,6 +179,76 @@ TOOL_DEFINITIONS: list[dict] = [
 ]
 
 
+### Cross-encoder reranking (optional pipeline step) ###
+
+_cross_encoder_model = None  # Loaded once, cached in memory
+
+
+def _get_cross_encoder():
+    """Load cross-encoder model once, reuse on every call. ~82MB, runs on CPU."""
+    global _cross_encoder_model
+    if _cross_encoder_model is None:
+        try:
+            from sentence_transformers import CrossEncoder
+            _cross_encoder_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+            logger.info("[RERANK] Cross-encoder model loaded")
+        except Exception as exc:
+            logger.warning("[RERANK] Failed to load cross-encoder (disabled): %s", exc)
+            _cross_encoder_model = False  # False = tried and failed, don't retry
+    return _cross_encoder_model if _cross_encoder_model is not False else None
+
+
+def _cross_encoder_rerank(
+    query: str, candidates: list[dict], product_id: str, limit: int
+) -> list[dict]:
+    """Rerank candidates using cross-encoder for better precision.
+
+    Takes the top candidates from hybrid search and re-scores them by
+    encoding (query, document) pairs together. This sees the relationship
+    between query and document directly, giving more accurate relevance.
+
+    Gracefully falls back to original ranking if model unavailable.
+    """
+    from app.core.config import settings
+    if not settings.enable_cross_encoder_rerank:
+        return candidates
+
+    if len(candidates) < 2:
+        return candidates
+
+    model = _get_cross_encoder()
+    if model is None:
+        return candidates
+
+    try:
+        # Combine summary + full text for richest possible reranking input
+        pairs = []
+        for r in candidates:
+            page_data = db.get_page_analysis(product_id, r["source_id"], r["page"])
+            summary = r.get("summary", "")
+            detailed = (page_data or {}).get("detailed_text", "") if page_data else ""
+            doc_text = f"{summary}\n\n{detailed}".strip()
+            # Cross-encoders have a token limit (~512), truncate to keep it fast
+            pairs.append((query, doc_text[:1500]))
+
+        scores = model.predict(pairs, show_progress_bar=False)
+
+        for candidate, score in zip(candidates, scores):
+            candidate["cross_score"] = float(score)
+
+        # Re-sort by cross-encoder score
+        candidates.sort(key=lambda x: x.get("cross_score", 0.0), reverse=True)
+        logger.info(
+            "[RERANK] Reranked %d candidates, top score=%.3f",
+            len(candidates),
+            candidates[0].get("cross_score", 0) if candidates else 0,
+        )
+    except Exception as exc:
+        logger.warning("[RERANK] Reranking failed (using original order): %s", exc)
+
+    return candidates
+
+
 def _hybrid_search(product_id: str, query: str, limit: int = 8) -> list[dict]:
     """Combine FTS5 keyword search + embedding vector search into a single ranked list.
 
@@ -254,8 +324,12 @@ def _hybrid_search(product_id: str, query: str, limit: int = 8) -> list[dict]:
     except Exception as exc:
         logger.warning("Embedding search failed (non-fatal): %s", exc)
 
-    # Sort by combined score, return top results
+    # Sort by combined score
     ranked = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
+
+    # Cross-encoder reranking (optional second pass for better precision)
+    ranked = _cross_encoder_rerank(query, ranked, product_id, limit)
+
     return ranked[:limit]
 
 
