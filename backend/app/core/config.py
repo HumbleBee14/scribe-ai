@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     # Paths
     products_dir: str = str(PRODUCTS_DIR)
-    default_product_id: str = "vulcan-omnipro-220"
+    default_product_id: str = ""
     max_documents_per_product: int = 10
 
     # Feature flags

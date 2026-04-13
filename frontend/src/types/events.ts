@@ -58,14 +58,6 @@ export interface SessionUpdateEvent {
   data: {
     id: string;
     product_id?: string;
-    product_name?: string | null;
-    current_process: string | null;
-    current_voltage: string | null;
-    current_material: string | null;
-    current_thickness: string | null;
-    setup_steps_completed: string[];
-    safety_warnings_shown: string[];
-    context_summary: string;
   };
 }
 
@@ -123,14 +115,6 @@ export interface ChatMessage {
 export interface SessionState {
   id: string;
   productId?: string;
-  productName?: string | null;
-  currentProcess: string | null;
-  currentVoltage: string | null;
-  currentMaterial: string | null;
-  currentThickness: string | null;
-  setupStepsCompleted: string[];
-  safetyWarningsShown: string[];
-  contextSummary: string;
 }
 
 export interface SelectedSourcePage {

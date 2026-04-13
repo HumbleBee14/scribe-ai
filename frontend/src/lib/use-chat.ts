@@ -185,14 +185,6 @@ export function useChat(productId: string, conversationId: string | null) {
             setSession({
               id: sessionData.id,
               productId: sessionData.product_id,
-              productName: sessionData.product_name,
-              currentProcess: sessionData.current_process,
-              currentVoltage: sessionData.current_voltage,
-              currentMaterial: sessionData.current_material,
-              currentThickness: sessionData.current_thickness,
-              setupStepsCompleted: sessionData.setup_steps_completed ?? [],
-              safetyWarningsShown: sessionData.safety_warnings_shown ?? [],
-              contextSummary: sessionData.context_summary ?? "",
             });
             continue;
           }
@@ -295,7 +287,7 @@ export function useChat(productId: string, conversationId: string | null) {
         const isAbort = err instanceof DOMException && err.name === "AbortError";
         const msg = isAbort
           ? controller.signal.reason === "timeout"
-            ? "Request timed out after 90 seconds."
+            ? `Request timed out after ${Math.round(REQUEST_TIMEOUT_MS / 60000)} minutes.`
             : "Stopped."
           : `Connection error: ${err instanceof Error ? err.message : "Unknown error"}`;
 

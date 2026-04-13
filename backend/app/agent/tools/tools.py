@@ -157,8 +157,8 @@ TOOL_DEFINITIONS: list[dict] = [
             "Memories persist across conversations and are injected into every future chat. "
             "Use 'add' when the user mentions their setup, preferences, or recurring context. "
             "Use 'delete' when the user says to forget something or remove a preference. "
-            "Examples to add: 'Uses 240V input', 'Primarily does MIG on mild steel', 'Beginner welder'. "
-            "Maximum 5 memories per product. Keep each memory brief (under 100 chars)."
+            "Examples to add: 'Uses the product at home', 'Primarily interested in maintenance', 'First-time user'. "
+            "Maximum 6 memories per product. Keep each memory brief (under 100 chars)."
         ),
         "input_schema": {
             "type": "object",
