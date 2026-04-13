@@ -59,9 +59,9 @@ export function SVGViewer({ code, title }: Props) {
 </html>`;
 
   return (
-    <div className="rounded-xl border border-neutral-700 bg-neutral-900 overflow-hidden">
+    <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 overflow-hidden">
       {title && (
-        <div className="border-b border-neutral-800 px-4 py-2 text-sm font-medium text-white">
+        <div className="border-b border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-4 py-2 text-sm font-medium text-gray-900 dark:text-neutral-100">
           {title}
         </div>
       )}

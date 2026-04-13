@@ -13,14 +13,16 @@ export type ParsedTextSegment =
   | { kind: "artifact"; artifact: ParsedArtifact }
   | { kind: "artifact_loading"; renderer: string; title: string; partial: string };
 
+// Allow escaped quotes (\") inside type and title attributes
 const ARTIFACT_REGEX =
-  /<artifact\s+type="([^"]*)"(?:\s+title="([^"]*)")?[^>]*>([\s\S]*?)<\/artifact>/g;
-const ARTIFACT_OPEN_REGEX = /<artifact\s+type="([^"]*)"(?:\s+title="([^"]*)")?[^>]*>/;
+  /<artifact\s+type="((?:[^"\\]|\\.)*)"(?:\s+title="((?:[^"\\]|\\.)*)")?\s*>([\s\S]*?)<\/artifact>/g;
+const ARTIFACT_OPEN_REGEX = /<artifact\s+type="((?:[^"\\]|\\.)*)"(?:\s+title="((?:[^"\\]|\\.)*)")?\s*>/;
 
 function parseArtifactMatch(match: RegExpExecArray): ParsedArtifact {
   return {
     renderer: match[1],
-    title: match[2] || match[1],
+    // Unescape \" -> " in the title for display
+    title: (match[2] || match[1]).replace(/\\"/g, '"'),
     code: match[3].trim(),
   };
 }

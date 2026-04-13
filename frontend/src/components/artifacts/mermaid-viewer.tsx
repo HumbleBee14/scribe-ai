@@ -160,6 +160,15 @@ function sanitizeMermaid(raw: string): string {
   code = code.replace(/['']/g, "'");               // smart single quotes
   code = code.replace(/[\u200B-\u200D\uFEFF]/g, ""); // zero-width junk
 
+  // Fix backslash-escaped quotes inside labels: \" -> ' (Mermaid has no escape syntax)
+  // Match content inside ["..."] and replace \" with '
+  code = code.replace(/\["((?:[^"]|\\")*)"\]/g, (match) => {
+    return match.replace(/\\"/g, "'");
+  });
+
+  // Also fix bare \" anywhere else in the code (outside quotes)
+  code = code.replace(/\\"/g, "'");
+
   // Auto-quote labels with special chars (emojis, parens, symbols)
   code = quoteLabels(code);
 
@@ -324,7 +333,7 @@ try {
   return (
     <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 overflow-hidden">
       {title && (
-        <div className="border-b border-gray-200 dark:border-neutral-700 px-4 py-2 text-sm font-medium text-gray-900 dark:text-neutral-100">
+        <div className="border-b border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-4 py-2 text-sm font-medium text-gray-900 dark:text-neutral-100">
           {title}
         </div>
       )}
