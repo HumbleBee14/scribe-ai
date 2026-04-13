@@ -116,17 +116,51 @@ export function MessageBubble({
         <ToolCallsSection toolCalls={message.toolCalls} isStreaming={!!message.isStreaming} />
 
         {/* Interleaved content blocks (text, artifacts, images in arrival order) */}
+        {/* Consecutive image blocks are grouped into a flex-wrap row */}
         {message.blocks && message.blocks.length > 0 ? (
-          message.blocks.map((block, i) => (
-            <InlineBlock
-              key={i}
-              block={block}
-              isUser={isUser}
-              isStreaming={!!message.isStreaming}
-              onSelectSourcePage={onSelectSourcePage}
-              onImageClick={setLightboxSrc}
-            />
-          ))
+          (() => {
+            const groups: Array<{ type: "single"; index: number } | { type: "images"; indices: number[] }> = [];
+            for (let i = 0; i < message.blocks.length; i++) {
+              if (message.blocks[i].type === "image") {
+                const last = groups[groups.length - 1];
+                if (last && last.type === "images") {
+                  last.indices.push(i);
+                } else {
+                  groups.push({ type: "images", indices: [i] });
+                }
+              } else {
+                groups.push({ type: "single", index: i });
+              }
+            }
+            return groups.map((group, gi) => {
+              if (group.type === "single") {
+                return (
+                  <InlineBlock
+                    key={gi}
+                    block={message.blocks![group.index]}
+                    isUser={isUser}
+                    isStreaming={!!message.isStreaming}
+                    onSelectSourcePage={onSelectSourcePage}
+                    onImageClick={setLightboxSrc}
+                  />
+                );
+              }
+              return (
+                <div key={gi} className="flex flex-wrap gap-3 justify-center">
+                  {group.indices.map((idx) => (
+                    <InlineBlock
+                      key={idx}
+                      block={message.blocks![idx]}
+                      isUser={isUser}
+                      isStreaming={!!message.isStreaming}
+                      onSelectSourcePage={onSelectSourcePage}
+                      onImageClick={setLightboxSrc}
+                    />
+                  ))}
+                </div>
+              );
+            });
+          })()
         ) : (
           /* Fallback for old messages without blocks */
           <>

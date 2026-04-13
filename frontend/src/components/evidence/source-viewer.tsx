@@ -19,6 +19,19 @@ export function SourceViewer({ productId, selectedSource, artifacts }: Props) {
     <div className="space-y-5">
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
+          Artifacts
+        </h3>
+        {artifacts.length === 0 ? (
+          <p className="mt-2 text-xs text-gray-400 dark:text-neutral-400">
+            Artifacts will appear here once the assistant generates visuals.
+          </p>
+        ) : (
+          <SidebarArtifactList artifacts={artifacts} />
+        )}
+      </div>
+
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
           Source Viewer
         </h3>
         <p className="mt-2 text-xs text-gray-400 dark:text-neutral-400">
@@ -33,19 +46,6 @@ export function SourceViewer({ productId, selectedSource, artifacts }: Props) {
           No source selected yet.
         </div>
       )}
-
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
-          Artifacts
-        </h3>
-        {artifacts.length === 0 ? (
-          <p className="mt-2 text-xs text-gray-400 dark:text-neutral-400">
-            Artifacts will appear here once the assistant generates visuals.
-          </p>
-        ) : (
-          <SidebarArtifactList artifacts={artifacts} />
-        )}
-      </div>
     </div>
   );
 }

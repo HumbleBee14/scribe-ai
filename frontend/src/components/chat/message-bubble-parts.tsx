@@ -97,8 +97,9 @@ function extractFollowUps(text: string): string[] {
   while ((match = regex.exec(text)) !== null) {
     const block = match[1];
     for (const line of block.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed.length > 5) questions.push(trimmed);
+      // Strip leading markdown list marker (-, *, or numbered)
+      const cleaned = line.trim().replace(/^[-*]\s+/, "").replace(/^\d+\.\s+/, "");
+      if (cleaned.length > 5) questions.push(cleaned);
     }
   }
   return questions;
@@ -119,13 +120,13 @@ export function FollowUpSuggestions({
   if (followUps.length === 0 || !onSelect) return null;
 
   return (
-    <div className="flex flex-wrap gap-2 pt-1">
+    <div className="flex flex-wrap gap-2 pt-2">
       {followUps.map((question, index) => (
         <button
           key={index}
           type="button"
           onClick={() => onSelect(question)}
-          className="rounded-full border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-3 py-1.5 text-xs text-gray-600 dark:text-neutral-300 hover:border-orange-300 dark:hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-300 transition-colors text-left"
+          className="rounded-full border-2 border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-4 py-2 text-xs font-medium text-gray-700 dark:text-neutral-200 shadow-sm hover:border-orange-400 dark:hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-300 hover:shadow-md transition-all text-left"
         >
           {question}
         </button>
@@ -218,8 +219,8 @@ export function PageImageBlock({
 }) {
   const url = buildBackendUrl(img.url);
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-2">
-      <div className="mb-1 flex items-center justify-between gap-2 text-xs text-gray-400 dark:text-neutral-400">
+    <div className="w-72 shrink-0 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-4 py-3">
+      <div className="mb-2 flex items-center justify-between gap-2 text-xs text-gray-400 dark:text-neutral-400">
         <span>Manual Page {img.page}</span>
         <button
           type="button"
@@ -236,14 +237,14 @@ export function PageImageBlock({
           <ExternalLink suppressHydrationWarning className="h-3 w-3" />
         </button>
       </div>
-      <button type="button" onClick={() => onImageClick?.(url)} className="block">
+      <button type="button" onClick={() => onImageClick?.(url)} className="flex w-full justify-center overflow-hidden rounded-md bg-gray-50 px-10 py-5 dark:bg-neutral-800">
         <Image
           src={url}
           alt={`Manual page ${img.page}`}
           unoptimized
-          width={1200}
-          height={1600}
-          className="max-h-80 rounded hover:opacity-90 transition-opacity"
+          width={480}
+          height={360}
+          className="max-h-72 w-auto rounded object-contain hover:opacity-90 transition-opacity"
         />
       </button>
     </div>

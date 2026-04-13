@@ -116,16 +116,23 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
     if request.images:
         images_raw = [img.model_dump() for img in request.images]
 
-    # Run agent and stream events
+    # Run agent and stream events.
+    # Build a blocks array (same structure the frontend uses) to preserve
+    # the interleaved order of text, images, and artifacts for DB persistence.
     import time
     req_start = time.time()
     text_chars = 0
-    assistant_chunks: list[str] = []
+    blocks: list[dict] = []
+    current_text: list[str] = []
     tool_calls: list[dict] = []
-    source_pages: list[dict] = []
-    artifacts: list[dict] = []
-    follow_ups: list[str] = []
+    full_text_chunks: list[str] = []
     clarification_question: str | None = None
+
+    def _flush_text() -> None:
+        """Flush accumulated text deltas into a text block."""
+        if current_text:
+            blocks.append({"type": "text", "text": "".join(current_text)})
+            current_text.clear()
 
     async for event in orchestrator.run(
         user_message=request.message,
@@ -144,38 +151,36 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
             extra = f" (text so far: {text_chars} chars)" if evt_type == "done" else ""
             print(f"[{elapsed}] {evt_type}: {debug_data}{extra}", flush=True)
 
-        # Accumulate assistant response parts for DB persistence
+        # Build blocks array preserving interleaved positions
         if evt_type == "text_delta":
-            assistant_chunks.append(event["data"].get("content", ""))
+            chunk = event["data"].get("content", "")
+            current_text.append(chunk)
+            full_text_chunks.append(chunk)
         elif evt_type == "tool_end":
             tool_calls.append(event["data"])
         elif evt_type == "image":
-            source_pages.append(event["data"])
+            _flush_text()
+            blocks.append({"type": "image", "data": event["data"]})
         elif evt_type == "artifact":
-            artifacts.append(event["data"])
-        elif evt_type == "follow_ups":
-            follow_ups = event["data"].get("suggestions", [])
+            _flush_text()
+            blocks.append({"type": "artifact", "data": event["data"]})
         elif evt_type == "clarification":
             clarification_question = event["data"].get("question")
         elif evt_type == "done":
-            # Save assistant message to DB
-            assistant_text = "".join(assistant_chunks).strip()
-            if assistant_text or tool_calls or artifacts:
-                assistant_content: dict = {"text": assistant_text}
+            _flush_text()
+
+            # Save assistant message to DB with blocks preserving position
+            if blocks or tool_calls:
+                assistant_content: dict = {"blocks": blocks}
                 if tool_calls:
                     assistant_content["toolCalls"] = tool_calls
-                if source_pages:
-                    assistant_content["sourcePages"] = source_pages
-                if artifacts:
-                    assistant_content["artifacts"] = artifacts
-                if follow_ups:
-                    assistant_content["followUps"] = follow_ups
                 db.add_message(conversation_id, "assistant", assistant_content)
 
             # Update in-memory session history
+            full_text = "".join(full_text_chunks).strip()
             status = event["data"].get("status", "completed")
-            if status == "completed" and assistant_text:
-                session_manager.append_turn(session, request.message, assistant_text)
+            if status == "completed" and full_text:
+                session_manager.append_turn(session, request.message, full_text)
             elif status == "clarification_required" and clarification_question:
                 session_manager.append_turn(session, request.message, clarification_question)
 

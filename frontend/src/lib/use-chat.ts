@@ -33,29 +33,44 @@ function resolvePendingToolCalls(msg: ChatMessage): ChatMessage {
 /** Convert a DB message row to a ChatMessage for rendering. */
 function dbMessageToChatMessage(row: { id: number; role: string; content: Record<string, unknown> }): ChatMessage {
   const content = row.content;
+  // New format: blocks array preserving interleaved text/image/artifact positions
+  const blocks = content.blocks as Array<{ type: string; text?: string; data?: Record<string, unknown> }> | undefined;
+
+  // Build full text content from text blocks (for follow-up extraction, search, etc.)
+  const textContent = blocks
+    ? blocks.filter((b) => b.type === "text").map((b) => b.text || "").join("")
+    : (content.text as string) || "";
+
   const msg: ChatMessage = {
     id: `db-${row.id}`,
     role: row.role as "user" | "assistant",
-    content: (content.text as string) || "",
+    content: textContent,
     isStreaming: false,
   };
 
   if (row.role === "assistant") {
     if (content.toolCalls) msg.toolCalls = content.toolCalls as ChatMessage["toolCalls"];
-    if (content.sourcePages) msg.pageImages = content.sourcePages as ChatMessage["pageImages"];
-    if (content.artifacts) {
-      msg.blocks = [];
-      // Rebuild blocks: text + artifacts interleaved
-      if (msg.content) msg.blocks.push({ type: "text", text: msg.content });
-      for (const art of content.artifacts as ArtifactEvent["data"][]) {
-        msg.blocks.push({ type: "artifact", data: art });
-      }
+
+    if (blocks) {
+      // Blocks format: use directly, preserving interleaved positions
+      msg.blocks = blocks.map((b) => {
+        if (b.type === "text") return { type: "text" as const, text: b.text || "" };
+        if (b.type === "image") return { type: "image" as const, data: b.data as ImageEvent["data"] };
+        if (b.type === "artifact") return { type: "artifact" as const, data: b.data as ArtifactEvent["data"] };
+        return { type: "text" as const, text: "" };
+      });
+      // Extract pageImages from image blocks for sidebar source viewer
+      msg.pageImages = blocks
+        .filter((b) => b.type === "image")
+        .map((b) => b.data as ImageEvent["data"]);
+    } else {
+      // Legacy flat format (old messages before blocks migration)
+      if (content.sourcePages) msg.pageImages = content.sourcePages as ChatMessage["pageImages"];
+      if (content.text) msg.content = content.text as string;
     }
-    if (content.followUps) msg.followUps = content.followUps as string[];
   }
 
   if (row.role === "user" && content.images) {
-    // Image paths from DB -- these are served via /assets/uploads/ endpoint
     msg.uploadedImagePaths = content.images as string[];
   }
 
@@ -83,10 +98,20 @@ export function useChat(productId: string, conversationId: string | null) {
     }
 
     let cancelled = false;
-    getConversation(conversationId).then((conv) => {
-      if (cancelled || !conv) return;
-      setMessages(conv.messages.map(dbMessageToChatMessage));
-    });
+    getConversation(conversationId)
+      .then((conv) => {
+        if (cancelled || !conv) return;
+        setMessages(conv.messages.map(dbMessageToChatMessage));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setMessages([{
+          id: "error-load",
+          role: "assistant",
+          content: "Could not load this conversation. The backend may be unreachable.",
+          isStreaming: false,
+        }]);
+      });
     return () => { cancelled = true; };
   }, [conversationId]);
 
