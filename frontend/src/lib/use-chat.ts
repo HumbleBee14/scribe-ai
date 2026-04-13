@@ -234,6 +234,10 @@ export function useChat(productId: string, conversationId: string | null) {
                     copy[idx] = { ...copy[idx], ok: data.ok as boolean };
                     msg.toolCalls = copy;
                   }
+                  // Notify sidebar to refresh memories
+                  if ((data.tool as string) === "update_memory") {
+                    window.dispatchEvent(new Event("memories-changed"));
+                  }
                   break;
                 }
 

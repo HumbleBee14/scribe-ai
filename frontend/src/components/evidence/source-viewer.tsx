@@ -270,6 +270,13 @@ function MemoriesSection({ productId }: { productId: string }) {
     setMaxMemories(data.max);
   }, [productId]);
 
+  // Reload when agent updates memory via tool call
+  useEffect(() => {
+    const handler = () => void reload();
+    window.addEventListener("memories-changed", handler);
+    return () => window.removeEventListener("memories-changed", handler);
+  }, [reload]);
+
   useEffect(() => {
     void reload();
   }, [reload]);
