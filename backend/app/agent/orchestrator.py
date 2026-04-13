@@ -15,7 +15,7 @@ from claude_agent_sdk import (
 )
 
 from app.agent.prompts import build_system_prompt
-from app.agent.tools_mcp import MCP_SERVER_NAME, create_knowledge_mcp_server
+from app.agent.tools import MCP_SERVER_NAME, create_knowledge_mcp_server
 from app.core.config import settings
 from app.packs.models import ProductRuntime
 from app.packs.registry import get_product_registry, use_product_runtime
@@ -123,7 +123,8 @@ class AgentOrchestrator:
             permission_mode="bypassPermissions",
             include_partial_messages=True,
             allowed_tools=[
-                "Read",  # Built-in: agent can read files including page images for vision
+                "Read",  # Built-in: read files including page images for vision
+                "WebSearch",  # Built-in: web search for external knowledge
                 f"mcp__{MCP_SERVER_NAME}__*",  # All our custom tools
             ],
             # Pass API key explicitly so the bundled CLI uses pay-per-token API
@@ -186,6 +187,9 @@ class AgentOrchestrator:
                                     },
                                 }
 
+        except asyncio.CancelledError:
+            print("[AGENT] Request cancelled (client disconnected or timeout)", flush=True)
+            return
         except Exception:
             logger.exception("Agent SDK runtime error")
             if not has_error:

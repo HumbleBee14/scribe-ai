@@ -146,28 +146,30 @@ body {
   width: 100%;
   font-size: 0.875em;
   margin: 0.75em 0;
+  border: 1px solid #d1d5db;
   border-radius: 8px;
   overflow: hidden;
 }
-.chat-prose thead { background: #f3f4f6; }
-.dark .chat-prose thead { background: #1a1a2e; }
+.dark .chat-prose table { border-color: #444; }
+.chat-prose thead { background: #e5e7eb; }
+.dark .chat-prose thead { background: #2a2a3e; }
 .chat-prose th {
   padding: 10px 14px;
-  font-weight: 600;
+  font-weight: 700;
   text-align: left;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #c5c9d0;
   font-size: 0.8em;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--muted);
+  color: #374151;
 }
-.dark .chat-prose th { border-color: #333; }
+.dark .chat-prose th { border-color: #555; color: #d1d5db; }
 .chat-prose td {
   padding: 8px 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #d1d5db;
   line-height: 1.5;
 }
-.dark .chat-prose td { border-color: #333; }
+.dark .chat-prose td { border-color: #444; }
 .chat-prose tr:nth-child(even) { background: #f9fafb; }
 .dark .chat-prose tr:nth-child(even) { background: #0d0d0d; }
 
