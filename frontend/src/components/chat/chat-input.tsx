@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import Image from "next/image";
-import { ImagePlus, Send, Square, X } from "lucide-react";
+import { Headphones, ImagePlus, Mic, MicOff, Send, Square, Volume2, X } from "lucide-react";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 
 interface Props {
@@ -13,9 +13,22 @@ interface Props {
   onStop?: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
+  // Voice props
+  voiceSupported?: boolean;
+  isListening?: boolean;
+  isSpeaking?: boolean;
+  interimText?: string;
+  handsFreeModeOn?: boolean;
+  onToggleListening?: () => void;
+  onStopSpeaking?: () => void;
+  onToggleHandsFree?: (on: boolean) => void;
 }
 
-export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
+export function ChatInput({
+  onSend, onStop, disabled, isStreaming,
+  voiceSupported, isListening, isSpeaking, interimText,
+  handsFreeModeOn, onToggleListening, onStopSpeaking, onToggleHandsFree,
+}: Props) {
   const [text, setText] = useState("");
   const [pendingImages, setPendingImages] = useState<
     Array<{ mediaType: string; data: string; preview: string }>
@@ -145,13 +158,17 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
           className="hidden"
         />
         <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
+          value={isListening && interimText ? interimText : text}
+          onChange={(e) => { if (!isListening) setText(e.target.value); }}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder="Ask about the Vulcan OmniPro 220... (paste images with Ctrl+V)"
+          placeholder={isListening ? "Listening..." : "Ask about your product... (paste images with Ctrl+V)"}
           rows={1}
-          className="flex-1 resize-none rounded-lg border border-gray-300 dark:border-neutral-500 bg-white dark:bg-neutral-800 px-4 py-2.5 text-sm text-gray-900 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-400 focus:border-orange-400 dark:focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-900"
+          className={`flex-1 resize-none rounded-lg border bg-white dark:bg-neutral-800 px-4 py-2.5 text-sm text-gray-900 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-400 focus:outline-none focus:ring-2 ${
+            isListening
+              ? "border-red-400 dark:border-red-500 focus:ring-red-100 dark:focus:ring-red-900 placeholder-red-400 dark:placeholder-red-400"
+              : "border-gray-300 dark:border-neutral-500 focus:border-orange-400 dark:focus:border-orange-500 focus:ring-orange-100 dark:focus:ring-orange-900"
+          }`}
           disabled={disabled && !isStreaming}
         />
 
@@ -175,7 +192,44 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
             <Send suppressHydrationWarning className="h-5 w-5" />
           </button>
         )}
+
+        {/* Voice controls */}
+        {voiceSupported && (
+          <>
+            {/* Mic button */}
+            {isSpeaking ? (
+              <button
+                type="button"
+                onClick={onStopSpeaking}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-500 text-white hover:bg-purple-400 transition-colors"
+                title="Stop speaking"
+              >
+                <Volume2 suppressHydrationWarning className="h-5 w-5 animate-pulse" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onToggleListening}
+                disabled={isStreaming}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                  isListening
+                    ? "bg-red-500 text-white hover:bg-red-400 animate-pulse"
+                    : "border border-gray-300 dark:border-neutral-500 bg-gray-50 dark:bg-neutral-800 text-gray-500 dark:text-neutral-300 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-700"
+                } disabled:opacity-40`}
+                title={isListening ? "Stop listening" : "Voice input"}
+              >
+                {isListening ? (
+                  <MicOff suppressHydrationWarning className="h-5 w-5" />
+                ) : (
+                  <Mic suppressHydrationWarning className="h-5 w-5" />
+                )}
+              </button>
+            )}
+
+          </>
+        )}
       </div>
+
     </div>
   );
 }

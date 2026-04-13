@@ -10,6 +10,7 @@ import {
   Loader2,
   ShieldAlert,
   User,
+  Volume2,
 } from "lucide-react";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import {
@@ -25,12 +26,16 @@ interface Props {
   message: ChatMessage;
   onQuickReply?: (message: string) => void;
   onSelectSourcePage?: (source: SelectedSourcePage) => void;
+  onSpeak?: (text: string) => void;
+  isSpeakingThis?: boolean;
 }
 
 export function MessageBubble({
   message,
   onQuickReply,
   onSelectSourcePage,
+  onSpeak,
+  isSpeakingThis,
 }: Props) {
   const isUser = message.role === "user";
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -228,20 +233,36 @@ export function MessageBubble({
         )}
       </div>
 
-      {/* Copy button: right side for assistant, left side for user (flex-row-reverse) */}
+      {/* Action buttons: copy + speak */}
       {message.content && !message.isStreaming && (
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-300 dark:text-neutral-600 hover:text-gray-500 dark:hover:text-neutral-400 focus:text-gray-500 dark:focus:text-neutral-400 transition-colors opacity-0 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100"
-          title="Copy"
-        >
-          {copied ? (
-            <Check suppressHydrationWarning className="h-3.5 w-3.5 text-green-500" />
-          ) : (
-            <Copy suppressHydrationWarning className="h-3.5 w-3.5" />
+        <div className="mt-1 flex flex-col gap-1 shrink-0 opacity-0 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-gray-300 dark:text-neutral-600 hover:text-gray-500 dark:hover:text-neutral-400 transition-colors"
+            title="Copy"
+          >
+            {copied ? (
+              <Check suppressHydrationWarning className="h-3.5 w-3.5 text-green-500" />
+            ) : (
+              <Copy suppressHydrationWarning className="h-3.5 w-3.5" />
+            )}
+          </button>
+          {!isUser && onSpeak && (
+            <button
+              type="button"
+              onClick={() => onSpeak(message.content)}
+              className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+                isSpeakingThis
+                  ? "text-purple-500 dark:text-purple-400"
+                  : "text-gray-300 dark:text-neutral-600 hover:text-purple-500 dark:hover:text-purple-400"
+              }`}
+              title={isSpeakingThis ? "Speaking..." : "Read aloud"}
+            >
+              <Volume2 suppressHydrationWarning className={`h-3.5 w-3.5 ${isSpeakingThis ? "animate-pulse" : ""}`} />
+            </button>
           )}
-        </button>
+        </div>
       )}
     </div>
   );
