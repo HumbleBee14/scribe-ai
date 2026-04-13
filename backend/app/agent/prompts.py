@@ -37,6 +37,7 @@ Be patient, clear, and encouraging. Assume the user may be encountering this sub
 <artifact type="TYPE" title="TITLE">
 CONTENT
 </artifact>
+CRITICAL: Never use unescaped double quotes inside artifact title attributes. Use single quotes or escape with backslash: title="1/8 inch" not title="1/8" steel".
 
 Supported types: svg, mermaid, html (self-contained, mobile-responsive).
 Examples:
