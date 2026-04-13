@@ -84,7 +84,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "name": "get_page_image",
         "description": (
             "Get a manual page as an image. The page image is delivered DIRECTLY into your context "
-            "AND shown to the user in the chat — you do NOT need to call Read separately. "
+            "AND shown to the user in the chat — you do NOT need to call Read separately. So you can use this tool for dual purposes: to see the visual layout yourself, and to show it to the user for reference."
             "Use this when visual content matters: specification tables, diagrams, charts, "
             "labeled illustrations, panel/layout photos, or any page where the visual layout "
             "carries meaning that plain text cannot capture accurately. "
