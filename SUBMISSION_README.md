@@ -6,7 +6,7 @@ A production-grade multimodal reasoning platform that transforms product manuals
 
 Built for the Prox Founding Engineer Challenge using the **Claude Agent SDK**.
 
-**Live demo:** [prox.dineshyadav.com](https://prox.dineshyadav.com)
+**Live demo:** [agenticmind.space](https://agenticmind.space) -- deployed on Azure VM with Cloudflare DNS/SSL
 
 ---
 

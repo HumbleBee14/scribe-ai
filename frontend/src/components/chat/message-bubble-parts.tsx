@@ -143,7 +143,11 @@ function extractFollowUps(text: string): string[] {
 }
 
 export function stripFollowupsBlock(text: string): string {
-  return text.replace(FOLLOWUPS_BLOCK_REGEX, "").trim();
+  // Strip completed followups blocks
+  let result = text.replace(FOLLOWUPS_BLOCK_REGEX, "");
+  // Strip unclosed followups block (still streaming, closing ``` hasn't arrived)
+  result = result.replace(/```followups\n[\s\S]*$/i, "");
+  return result.trim();
 }
 
 export function FollowUpSuggestions({

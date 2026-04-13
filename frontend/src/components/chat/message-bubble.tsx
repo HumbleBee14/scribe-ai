@@ -151,13 +151,16 @@ export function MessageBubble({
 
         {/* Reasoning / thinking (collapsible, closed by default) */}
         {message.thinking && (
-          <details className="text-xs text-gray-400 dark:text-neutral-500">
+          <details className="group text-xs text-gray-400 dark:text-neutral-500">
             <summary className="flex cursor-pointer select-none items-center gap-1.5 hover:text-gray-600 dark:hover:text-neutral-300 transition-colors">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
                 <circle cx="12" cy="12" r="10" />
                 <path d="M12 6v6l4 2" />
               </svg>
               <span>Reasoning</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 transition-transform group-open:rotate-180">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
             </summary>
             <div className="mt-1.5 ml-5 max-h-48 overflow-y-auto whitespace-pre-wrap border-l-2 border-gray-100 pl-3 leading-relaxed dark:border-neutral-800">
               {message.thinking}
@@ -296,13 +299,19 @@ export function MessageBubble({
           {!isUser && onSpeak && (
             <button
               type="button"
-              onClick={() => onSpeak(message.content)}
+              onClick={() => {
+                if (isSpeakingThis) {
+                  window.speechSynthesis?.cancel();
+                } else {
+                  onSpeak(message.content);
+                }
+              }}
               className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
                 isSpeakingThis
                   ? "text-purple-500 dark:text-purple-400"
                   : "text-gray-300 dark:text-neutral-600 hover:text-purple-500 dark:hover:text-purple-400"
               }`}
-              title={isSpeakingThis ? "Speaking..." : "Read aloud"}
+              title={isSpeakingThis ? "Stop speaking" : "Read aloud"}
             >
               <Volume2 suppressHydrationWarning className={`h-3.5 w-3.5 ${isSpeakingThis ? "animate-pulse" : ""}`} />
             </button>

@@ -37,6 +37,7 @@ export function useVoice({
   const [handsFreeModeOn, setHandsFreeMode] = useState(false);
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const cachedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
   const onTranscriptRef = useRef(onTranscript);
   onTranscriptRef.current = onTranscript;
 
@@ -192,37 +193,35 @@ export function useVoice({
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
 
-    // Pick a female/natural voice
-    // Chrome loads voices async - trigger load and use what's available
-    let voices = window.speechSynthesis.getVoices();
-    if (voices.length === 0) {
-      // Force voice loading
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
-      window.speechSynthesis.cancel();
-      voices = window.speechSynthesis.getVoices();
+    // Pick a female/natural voice -- cached after first selection
+    if (!cachedVoiceRef.current) {
+      let voices = window.speechSynthesis.getVoices();
+      if (voices.length === 0) {
+        // Force voice loading (Chrome loads async)
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+        window.speechSynthesis.cancel();
+        voices = window.speechSynthesis.getVoices();
+      }
+      const langPrefix = lang.split("-")[0];
+      const preferred = voices.find(
+        // macOS premium voices
+        (v) => v.lang.startsWith(langPrefix) && /samantha|ava|allison|susan|kate/i.test(v.name)
+      ) || voices.find(
+        // Windows natural voices
+        (v) => v.lang.startsWith(langPrefix) && /natural|jenny|aria|sara/i.test(v.name)
+      ) || voices.find(
+        // Google voices (Chrome)
+        (v) => v.lang.startsWith(langPrefix) && /google.*us|google.*uk/i.test(v.name)
+      ) || voices.find(
+        // Any female-sounding name
+        (v) => v.lang.startsWith(langPrefix) && /zira|hazel|fiona|karen|victoria|tessa|moira|veena/i.test(v.name)
+      ) || voices.find(
+        // Any matching language
+        (v) => v.lang.startsWith(langPrefix)
+      );
+      if (preferred) cachedVoiceRef.current = preferred;
     }
-    const langPrefix = lang.split("-")[0];
-    // Debug: log available voices on first call
-    if (voices.length > 0) {
-      console.log("[Voice] Available:", voices.filter(v => v.lang.startsWith(langPrefix)).map(v => `${v.name} (${v.lang})`).join(", "));
-    }
-    const preferred = voices.find(
-      // macOS premium voices
-      (v) => v.lang.startsWith(langPrefix) && /samantha|ava|allison|susan|kate/i.test(v.name)
-    ) || voices.find(
-      // Windows natural voices
-      (v) => v.lang.startsWith(langPrefix) && /natural|jenny|aria|sara/i.test(v.name)
-    ) || voices.find(
-      // Google voices (Chrome)
-      (v) => v.lang.startsWith(langPrefix) && /google.*us|google.*uk/i.test(v.name)
-    ) || voices.find(
-      // Any female-sounding name
-      (v) => v.lang.startsWith(langPrefix) && /zira|hazel|fiona|karen|victoria|tessa|moira|veena/i.test(v.name)
-    ) || voices.find(
-      // Any matching language
-      (v) => v.lang.startsWith(langPrefix)
-    );
-    if (preferred) utterance.voice = preferred;
+    if (cachedVoiceRef.current) utterance.voice = cachedVoiceRef.current;
 
     utterance.onstart = () => setState("speaking");
     utterance.onend = () => {
