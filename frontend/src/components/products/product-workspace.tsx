@@ -308,20 +308,20 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
 
           <Link
             href="/"
-            className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-xl font-black uppercase tracking-[0.38em] text-orange-600 transition-colors hover:text-orange-700 sm:text-2xl sm:tracking-[0.42em] xl:left-[calc(50%-10rem)] dark:text-orange-400 dark:hover:text-orange-300"
+            className="hidden sm:block absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-xl font-black uppercase tracking-[0.38em] text-orange-600 transition-colors hover:text-orange-700 sm:text-2xl sm:tracking-[0.42em] xl:left-[calc(50%-10rem)] dark:text-orange-400 dark:hover:text-orange-300"
             title="Back to workspaces"
           >
             Prox
           </Link>
 
-          <div className="relative z-10 flex min-w-0 flex-1 items-center justify-end gap-2">
+          <div className="relative z-10 flex min-w-0 flex-1 items-center justify-end gap-1.5 sm:gap-2">
             <select
               value={activeProductId}
               onChange={(event) => {
                 const nextProductId = event.target.value;
                 window.location.href = `/products/${nextProductId}`;
               }}
-              className="h-8 max-w-[9rem] rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 sm:max-w-[14rem]"
+              className={`h-8 truncate rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 sm:max-w-[14rem] ${historyOpen ? "hidden sm:block sm:max-w-[10rem]" : "max-w-[7rem] sm:max-w-[14rem]"}`}
               aria-label="Switch product workspace"
             >
               {products.map((product) => (
@@ -333,17 +333,17 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
             <button
               type="button"
               onClick={() => setMobileContextOpen(true)}
-              className="flex h-8 items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-600 transition-colors hover:text-gray-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:text-white xl:hidden"
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-600 transition-colors hover:text-gray-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:text-white xl:hidden"
               title="Workspace, sources, and artifacts"
             >
               <LibraryBig suppressHydrationWarning className="h-4 w-4" />
-              Context
+              <span className="hidden sm:inline">Context</span>
             </button>
             {voice.supported && (
               <button
                 type="button"
                 onClick={() => voice.setHandsFreeMode(!voice.handsFreeModeOn)}
-                className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors ${
+                className={`flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-colors ${
                   voice.handsFreeModeOn
                     ? "bg-green-500 text-white hover:bg-green-600"
                     : "border border-gray-200 bg-white text-gray-600 hover:text-gray-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:text-white"

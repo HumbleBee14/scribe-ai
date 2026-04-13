@@ -4,13 +4,18 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
+  Bot,
+  BrainCircuit,
   ChevronRight,
+  FileSearch,
   FileText,
   Loader2,
+  MessageSquareText,
   Pencil,
   Plus,
   ScanSearch,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { BACKEND_URL, buildBackendUrl, fetchProducts, ProductSummary } from "@/lib/api";
 import { CreateProductDialog } from "@/components/products/create-product-dialog";
@@ -88,7 +93,17 @@ export function ProductDashboard({
       />
 
       <div className="relative mx-auto max-w-5xl px-4 pb-20 pt-14 sm:px-6 lg:px-8">
-        <header className="text-center">
+        {/* Decorative floating icons */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+          <FileSearch className="absolute left-[5%] top-[8%] h-12 w-12 rotate-[-15deg] text-orange-300/25 dark:text-orange-400/12 sm:h-16 sm:w-16" />
+          <Bot className="absolute right-[7%] top-[6%] h-14 w-14 rotate-[12deg] text-orange-300/25 dark:text-orange-400/12 sm:h-18 sm:w-18" />
+          <BrainCircuit className="absolute left-[8%] top-[35%] h-10 w-10 rotate-[20deg] text-orange-300/28 dark:text-orange-400/10 sm:h-14 sm:w-14" />
+          <MessageSquareText className="absolute right-[5%] top-[32%] h-11 w-11 rotate-[-10deg] text-orange-300/28 dark:text-orange-400/10 sm:h-14 sm:w-14" />
+          <Sparkles className="absolute left-[15%] top-[18%] h-8 w-8 rotate-[25deg] text-orange-300/20 dark:text-orange-400/10 sm:h-10 sm:w-10" />
+          <FileText className="absolute right-[14%] top-[20%] h-9 w-9 rotate-[-20deg] text-orange-300/20 dark:text-orange-400/10 sm:h-11 sm:w-11" />
+        </div>
+
+        <header className="relative text-center">
           <div className="mx-auto flex w-full max-w-4xl flex-col items-center py-4 sm:py-6">
             <span
               className="select-none whitespace-nowrap bg-gradient-to-br from-orange-400/25 via-orange-500/20 to-orange-600/15 bg-clip-text text-[clamp(3.75rem,18vw,10.5rem)] font-black uppercase leading-[0.85] tracking-[0.02em] text-transparent dark:from-orange-400/20 dark:via-orange-500/15 dark:to-orange-600/10 sm:tracking-[0.04em]"
