@@ -59,6 +59,11 @@ function dbMessageToChatMessage(row: { id: number; role: string; content: Record
         if (b.type === "artifact") return { type: "artifact" as const, data: b.data as ArtifactEvent["data"] };
         return { type: "text" as const, text: "" };
       });
+      // Restore clarification from blocks
+      const clarBlock = blocks.find((b) => b.type === "clarification");
+      if (clarBlock?.data) {
+        msg.clarification = clarBlock.data as { question: string; options?: string[] };
+      }
       // Extract pageImages from image blocks for sidebar source viewer
       msg.pageImages = blocks
         .filter((b) => b.type === "image")

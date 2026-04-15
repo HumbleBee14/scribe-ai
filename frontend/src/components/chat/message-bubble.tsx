@@ -241,9 +241,14 @@ export function MessageBubble({
             <div className="flex items-start gap-2">
               <AlertTriangle suppressHydrationWarning className="mt-0.5 h-4 w-4 text-blue-500 dark:text-blue-400 shrink-0" />
               <div>
-                <p className="text-sm text-blue-700 dark:text-blue-200">
-                  {message.clarification.question}
-                </p>
+                <p
+                  className="text-sm text-blue-700 dark:text-blue-200"
+                  dangerouslySetInnerHTML={{
+                    __html: message.clarification.question
+                      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+                      .replace(/\n/g, "<br/>"),
+                  }}
+                />
                 {message.clarification.options && (
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {message.clarification.options.map((opt, i) => (

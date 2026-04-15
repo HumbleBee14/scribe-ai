@@ -7,6 +7,8 @@ A production-grade multimodal reasoning platform that transforms product manuals
 
 **Live demo:** [agenticmind.space](https://agenticmind.space) -- deployed on Azure VM with Cloudflare DNS/SSL
 
+**Video walkthrough:** [Watch on Loom](https://www.loom.com/share/d15c30e317504880b7de6872e8f6ed5b)
+
 ---
 
 ## Quick Setup/Start

@@ -178,6 +178,8 @@ async def _event_stream(request: ChatRequest) -> AsyncIterator[str]:
             blocks.append({"type": "artifact", "data": event["data"]})
         elif evt_type == "clarification":
             clarification_question = event["data"].get("question")
+            _flush_text()
+            blocks.append({"type": "clarification", "data": event["data"]})
         elif evt_type == "done":
             _flush_text()
 
