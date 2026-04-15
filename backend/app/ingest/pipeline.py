@@ -54,7 +54,7 @@ def render_single_page(
 
 
 # ---------------------------------------------------------------------------
-# Stage 2: Analyze a single page with Claude Vision
+# Stage 2: Analyze a single page (OCR or text extraction based on config)
 # ---------------------------------------------------------------------------
 
 def analyze_single_page(
@@ -64,22 +64,45 @@ def analyze_single_page(
     page_number: int,
     total_pages: int,
     image_path: Path,
+    source_path: Path | None = None,
 ) -> bool:
-    """Send one page image to Claude Vision OCR. Returns True on success."""
-    from app.ingest.ocr_vision import analyze_page
-    try:
-        result = analyze_page(
-            image_path=image_path,
-            product_id=product_id,
-            source_id=source_id,
-            source_label=source_label,
-            page_number=page_number,
-            total_pages=total_pages,
-        )
-        return result is not None
-    except Exception:
-        logger.exception("OCR failed: %s/%s page %d", product_id, source_id, page_number)
-        return False
+    """Analyze a page using OCR (default) or text extraction. Returns True on success."""
+    from app.core.config import settings
+
+    if settings.use_ocr_extraction:
+        # Claude Vision OCR (default) - sends page image to LLM
+        from app.ingest.ocr_vision import analyze_page
+        try:
+            result = analyze_page(
+                image_path=image_path,
+                product_id=product_id,
+                source_id=source_id,
+                source_label=source_label,
+                page_number=page_number,
+                total_pages=total_pages,
+            )
+            return result is not None
+        except Exception:
+            logger.exception("OCR failed: %s/%s page %d", product_id, source_id, page_number)
+            return False
+    else:
+        # Text extraction (free, local) - uses PyMuPDF
+        from app.ingest.text_extraction import analyze_page_text
+        if source_path is None:
+            logger.error("Text extraction requires source_path for %s/%s page %d", product_id, source_id, page_number)
+            return False
+        try:
+            result = analyze_page_text(
+                pdf_path=source_path,
+                product_id=product_id,
+                source_id=source_id,
+                page_number=page_number,
+                total_pages=total_pages,
+            )
+            return result is not None
+        except Exception:
+            logger.exception("Text extraction failed: %s/%s page %d", product_id, source_id, page_number)
+            return False
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +193,7 @@ def ingest_single_source(
 
         # Stage 2: OCR
         print(f"[{product_id}/{source_id}] Page {page_num}/{total_pages} | Stage 2: OCR (Claude Vision)...", flush=True)
-        if not analyze_single_page(product_id, source_id, source_label, page_num, total_pages, image_path):
+        if not analyze_single_page(product_id, source_id, source_label, page_num, total_pages, image_path, source_path=source_path):
             print(f"[{product_id}/{source_id}] Page {page_num}/{total_pages} | Stage 2: OCR FAILED", flush=True)
             continue
 
