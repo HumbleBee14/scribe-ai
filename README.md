@@ -4,13 +4,12 @@
 
 A production-grade multimodal reasoning platform that transforms product manuals into AI-powered Q&A assistants. Upload any PDF manual, and the system builds a knowledge base that answers questions with exact data, visual references, and page citations.
 
-Built for the Prox Founding Engineer Challenge using the **Claude Agent SDK**.
 
 **Live demo:** [agenticmind.space](https://agenticmind.space) -- deployed on Azure VM with Cloudflare DNS/SSL
 
 ---
 
-## Quick Start (< 2 minutes)
+## Quick Setup/Start
 
 ```bash
 git clone <repo-url>
@@ -26,7 +25,7 @@ make backend
 make frontend                  # Starts Next.js on localhost:3000
 ```
 
-The Vulcan OmniPro 220 manual comes pre-ingested with all 51 pages analyzed. Open `localhost:3000` and start chatting immediately.
+Note: This is pre-seeded with - The Vulcan OmniPro 220 manual, pre-ingested with all 51 pages analyzed. You can upload your own manul/document to test it if needed. Open `localhost:3000` and start chatting immediately.
 
 ---
 
@@ -50,7 +49,7 @@ The Vulcan OmniPro 220 manual comes pre-ingested with all 51 pages analyzed. Ope
               +----------+----------+                 +----------+----------+
                          |                                       |
               +----------v----------+              Stage 1: Render (PyMuPDF)
-              |    MCP Tool Server  |              Stage 2: OCR (Claude Vision)
+              |    MCP Tool Server  |              Stage 2: OCR (Vision) or Text Extraction
               |  search_manual      |              Stage 3: Embed (MiniLM)
               |  get_page_text      |                        |
               |  get_page_image     |              +---------v---------+
@@ -66,12 +65,12 @@ The Vulcan OmniPro 220 manual comes pre-ingested with all 51 pages analyzed. Ope
 
 ### Phase 1: Document Ingestion
 
-When a user uploads a PDF manual, it goes through a 3-stage pipeline. Each page is processed independently, so failures on one page don't block others.
+When a user uploads a PDF manual, it goes through a 4-stage pipeline. Each page is processed independently, so failures on one page don't block others.
 
 ```
-PDF uploaded
-  |
-  v
+                  PDF uploaded
+                    |
+                    v
 +------------------------------------------+
 | Stage 1: RENDER (local, ~2s for 48 pages)|
 |  PyMuPDF converts each page to PNG       |
@@ -131,7 +130,7 @@ PyMuPDF text extraction fails on complex layouts: multi-column pages, text overl
 
 **Why page-level granularity?**
 
-Each page in a product manual is typically a self-contained topic (a spec table, a procedure section, a diagram). Page-level chunking preserves this natural structure. The OCR summary tells the agent what each page contains, the detailed_text gives full content, and keywords enable search.
+Each page in a product manual is typically a self-contained topic (a spec table, a procedure section, a diagram). Page-level chunking preserves this natural structure. The OCR summary tells the agent what each page contains, the detailed_text gives full content, and keywords enable search. Avoided chunking to let agent handle appropriate extraction from the corpus smartly.
 
 ### Phase 2: Knowledge Storage
 
@@ -153,7 +152,7 @@ Everything lives in a single SQLite database file (`data/local.db`):
 
 **Why SQLite?**
 
-Single file, zero infrastructure, committed to git. Evaluators clone and run -- no database setup, no migrations, no Docker. FTS5 and sqlite-vec are built-in extensions that give us BM25 ranking and vector similarity search without external services.
+Single file, zero infrastructure, committed to git. You can clone and run -- no database setup, no migrations, no Docker. FTS5 and sqlite-vec are built-in extensions that give us BM25 ranking and vector similarity search without external services.
 
 ### Phase 3: Query-Time Retrieval
 
@@ -227,7 +226,7 @@ User query: "What's the duty cycle for MIG at 240V?"
 
 ### Phase 4: Agent Reasoning Loop
 
-The Claude Agent SDK manages the reasoning loop with **adaptive extended thinking** enabled. On complex questions, Claude reasons through its approach before responding -- which pages to check, how to cross-reference information, what tools to call. This thinking is streamed to the frontend and shown in a collapsible "Reasoning" section, giving users transparency into the agent's thought process. Simple questions skip thinking entirely (adaptive mode).
+The Claude Agent SDK manages the reasoning loop with **adaptive extended thinking** enabled. On complex questions, Claude reasons through its approach before responding -- which pages to check, how to cross-reference information, what tools to call. This thinking is streamed to the frontend and shown in a collapsible "Reasoning" section, giving users transparency into the agent's thought process. Simple questions skip thinking entirely (adaptive mode). We can replace the agent loop orachestor with our custom agentic loop easily with clear abstractions already in-place.
 
 The agent receives:
 
@@ -281,16 +280,15 @@ Instead of sending the entire manual or relying solely on search, we send a one-
 
 Responses stream to the frontend via SSE (Server-Sent Events):
 
-- **text_delta** -- streamed text tokens
-- **tool_start/tool_end** -- shows which tools the agent is using
-- **image** -- inline page image from the manual
-- **clarification** -- interactive clarification card with clickable options
-- **done** -- completion with token usage stats
+- **Text Streaming** -- streamed text tokens
+- **Tool Calls** -- shows which tools the agent is using
+- **Image/Pages** -- inline page image from the manual
+- **Clarification** -- interactive clarification card with clickable options
 
-**Inline artifacts** are detected by parsing `<artifact>` tags from the agent's text response:
-- `type="html"` -- rendered in a sandboxed iframe (calculators, comparison tables)
-- `type="mermaid"` -- rendered via Mermaid.js in a sandboxed iframe (flowcharts, decision trees)
-- `type="svg"` -- rendered directly (diagrams, schematics)
+**Inline artifacts** are detected from the agent's text response:
+- `HTML` -- rendered in a sandboxed iframe (calculators, comparison tables)
+- `Mmermaid` -- rendered via Mermaid.js in a sandboxed iframe (flowcharts, decision trees)
+- `SVG` -- rendered directly (diagrams, schematics)
 
 ---
 

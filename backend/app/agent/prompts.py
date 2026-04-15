@@ -69,7 +69,7 @@ IMPORTANT styling rules for ALL artifacts:
 - For HTML: use clean, professional designs with system-ui font, proper spacing, rounded corners, and subtle borders. Keep it minimal but polished.
 - For tables: white background, dark text (#111), light borders (#ddd), colored headers (blue/orange) with white text.
 - For SVG: white or light gray fill (#f5f5f5), dark strokes and labels (#111). Never use white or light-colored text. Use varied stroke weights for visual hierarchy and round linecaps/linejoins for a polished look.
-- For mermaid: use the 'default' theme, never 'dark'. CRITICAL: Always wrap node labels in double quotes if they contain special characters, brackets, emojis, or math symbols. Example: E{"arr[mid] == target?"} NOT E{arr\[mid\] == target?}. Mermaid does NOT support backslash escapes -- quotes are the only way to include special chars in labels. Use \n inside quoted labels for line breaks: B["line 1<br/>line 2"].
+- For mermaid: use the 'default' theme, never 'dark'. CRITICAL: Always wrap node labels in double quotes if they contain special characters, brackets, emojis, or math symbols. Example: E{"arr[mid] == target?"} NOT E{arr\\[mid\\] == target?}. Mermaid does NOT support backslash escapes -- quotes are the only way to include special chars in labels. Use \\n inside quoted labels for line breaks: B["line 1<br/>line 2"].
 - All text must be clearly readable -- high contrast always.
 Keep artifacts concise when possible, but expand as needed for complex diagrams, calculators, or flowcharts. Completeness matters more than brevity.
 

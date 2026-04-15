@@ -45,7 +45,8 @@ def main() -> None:
         host=args.host,
         port=args.port,
         reload=args.reload,
-        reload_excludes=[".venv/*", "*.pyc", "__pycache__/*"] if args.reload else None,
+        reload_excludes=[".venv", "*.pyc", "__pycache__", "node_modules"] if args.reload else None,
+        reload_dirs=["app"] if args.reload else None,
         loop="none",
         log_level="info",
     )
