@@ -321,8 +321,8 @@ def analyze_page(
                 is_toc=bool(result.get("is_toc", False)),
             )
 
-            if result.get("is_toc"):
-                _extract_toc_entries(product_id, source_id, page_number, result.get("detailed_text", ""))
+            # TOC pages are tagged here (is_toc=True in DB).
+            # Structured TOC extraction happens in build_toc.py as a separate pipeline stage.
 
             # Log with cache stats
             usage = response.usage
@@ -366,20 +366,3 @@ def analyze_page(
     return None
 
 
-def _extract_toc_entries(product_id: str, source_id: str, page_number: int, text: str) -> None:
-    """Parse TOC page text into structured entries."""
-    entries: list[tuple[str, int]] = []
-    for line in text.split("\n"):
-        match = re.match(r"^(.+?)\s*[.\s]{2,}\s*(\d+)\s*$", line.strip())
-        if match:
-            title = match.group(1).strip().rstrip(".")
-            page = int(match.group(2))
-            if title and page > 0:
-                entries.append((title, page))
-
-    for i, (title, start_page) in enumerate(entries):
-        end_page = entries[i + 1][1] - 1 if i + 1 < len(entries) else None
-        db.upsert_toc_entry(product_id, source_id, title, start_page, end_page)
-
-    if entries:
-        logger.info("[OCR] Extracted %d TOC entries from page %d", len(entries), page_number)

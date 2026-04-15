@@ -110,6 +110,18 @@ PDF uploaded
 |  generates 384-dim vector per page.      |
 |  Stored in SQLite via sqlite-vec.        |
 |  Status: done                            |
++--------------------+---------------------+
+                     |
+                     v
++------------------------------------------+
+| Stage 4: TOC BUILD (single LLM call)    |
+|  Collects all pages tagged is_toc=True   |
+|  Sends ALL TOC page images at once to    |
+|  Claude Vision. Gets clean structured    |
+|  JSON of sections with page numbers.     |
+|  Combined across all source documents    |
+|  into a unified table of contents.       |
+|  Skipped if no TOC pages were tagged.    |
 +------------------------------------------+
 ```
 
@@ -134,7 +146,7 @@ Everything lives in a single SQLite database file (`data/local.db`):
 | `page_embeddings` | 384-dim float vectors per page (for semantic search) |
 | `page_vec` | sqlite-vec virtual table for native vector similarity |
 | `page_fts` | FTS5 virtual table for BM25 keyword search |
-| `toc_entries` | Extracted table of contents with section -> page mapping |
+| `toc_entries` | LLM-extracted table of contents (multi-page, multi-document, structured via dedicated Vision call) |
 | `memories` | Per-product user preferences (persisted across sessions) |
 | `conversations` | Chat history with full message persistence |
 | `quick_actions` | Preset questions shown on the welcome screen |
@@ -145,7 +157,7 @@ Single file, zero infrastructure, committed to git. Evaluators clone and run -- 
 
 ### Phase 3: Query-Time Retrieval
 
-When a user asks a question, the system runs a hybrid search pipeline BEFORE the agent starts, injecting relevant page content into the system prompt:
+When a user asks a question, the system runs a hybrid search pipeline BEFORE the agent starts, injecting relevant page content alongside the user's message:
 
 ```
 User query: "What's the duty cycle for MIG at 240V?"
@@ -203,7 +215,7 @@ User query: "What's the duty cycle for MIG at 240V?"
                      |
                      v
         Top 3 pages full detailed_text
-        injected into system prompt
+        injected alongside user message
 ```
 
 **Why this 4-layer pipeline?**
@@ -222,7 +234,7 @@ The agent receives:
 1. **System prompt** with generic instructions
 2. **Product info** (name, description)
 3. **Document map** -- TOC entries + one-line summary per page (the agent's "table of contents" for the entire manual)
-4. **Retrieved context** -- full detailed_text of top 3 most relevant pages (from hybrid search)
+4. **Retrieved context** -- full detailed_text of top 3 most relevant pages (from hybrid search), delivered alongside the user's message for per-query freshness while the SDK client stays persistent
 5. **Tool definitions** -- 6 MCP tools registered via the SDK
 
 ```
@@ -450,6 +462,8 @@ multimodal-prox-challenge/
       api/
         chat.py              # SSE streaming chat endpoint
         products.py          # Product CRUD, upload, assets
+        conversations.py     # Chat history CRUD
+        routes.py            # Health check, config
       core/
         bootstrap.py         # App factory, lifespan, logging
         database.py          # SQLite schema, CRUD, FTS5, sqlite-vec

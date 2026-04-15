@@ -191,11 +191,17 @@ def ingest_single_source(
     # Update source page count
     db.update_source_pages(product_id, source_id, total_pages)
 
+    # Stage 4: Build structured TOC from tagged TOC pages (single LLM call)
+    from app.ingest.build_toc import build_toc_for_source
+    toc_count = build_toc_for_source(product_id, source_id, pages_dir)
+    stats["toc_entries"] = toc_count
+
     print(f"\n{'='*60}", flush=True)
     print(f"[PIPELINE] Complete: {product_id}/{source_id}", flush=True)
     print(f"  Rendered:  {stats['pages_rendered']}/{total_pages}", flush=True)
     print(f"  Analyzed:  {stats['pages_analyzed']}/{total_pages}", flush=True)
     print(f"  Embedded:  {stats['pages_embedded']}/{total_pages}", flush=True)
+    print(f"  TOC:       {stats['toc_entries']} entries", flush=True)
     print(f"{'='*60}\n", flush=True)
 
     return stats
