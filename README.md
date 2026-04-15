@@ -312,6 +312,8 @@ We send each page as an image to Claude Vision rather than extracting text with 
 - Mixed text/image content (step-by-step procedures with illustrations)
 - Multi-column layouts
 
+For users who want to avoid API costs on large documents, we also provide a configurable text-based fallback (`USE_OCR_EXTRACTION=false` in `.env`) that uses PyMuPDF for local extraction with table detection. Both modes produce identical output format (summary, detailed_text, keywords, is_toc) stored in the same database table, so everything downstream (embeddings, search, agent) works unchanged. Swap with a single env var, no code changes.
+
 ### 3. SQLite for everything
 
 One file, zero setup. FTS5 for keyword search, sqlite-vec for vector search, regular tables for metadata. Committed to git so evaluators get a pre-built knowledge base. No Docker, no external databases.
@@ -436,7 +438,7 @@ Plus built-in Agent SDK tools:
 | Frontend | Next.js 15, TypeScript, React, Tailwind CSS v4 |
 | Backend | Python, FastAPI, Claude Agent SDK |
 | Database | SQLite + FTS5 + sqlite-vec |
-| OCR | Claude Vision API (Sonnet 4.6) with prompt caching |
+| OCR | Claude Vision API with prompt caching |
 | Embeddings | sentence-transformers (all-MiniLM-L6-v2, local, free) |
 | Cross-encoder | ms-marco-MiniLM-L-6-v2 (reranking, local) |
 | Vector search | sqlite-vec (native C extension, pip installable) |
@@ -499,15 +501,15 @@ multimodal-prox-challenge/
 
 ---
 
-## What Makes This Submission Different
+## Feature Summary
 
 1. **Generic platform** -- not hardcoded to one product. Upload any manual and it works.
-2. **Vision-guided OCR** -- Claude Vision reads each page as a human would, not just text extraction.
+2. **Vision-guided OCR** -- Claude Vision reads each page as a human would, not just text extraction, with text based only fallback for failure or large document text extraction.
 3. **Hybrid retrieval** -- FTS5 keyword + semantic vector search with cross-encoder reranking and qualification filtering.
 4. **Document map architecture** -- agent gets a full index of the manual, decides what to read.
-5. **Agent autonomy** -- we provide context and tools, the agent reasons about what to do.
+5. **Agent autonomy** -- we provide context and tools, the agent reasons about what to do like human.
 6. **Multi-page cross-referencing** -- the agent gathers information from multiple pages and sections before answering complex questions. For a setup walkthrough, it independently fetches polarity, settings, safety, and connections pages, then synthesizes a complete answer. It also retries searches with rephrased terms if the first attempt returns weak results.
 7. **Clickable source citations** -- every page number in the agent's response is clickable and opens the actual manual page in the source viewer. Comma-separated lists like "pages 3, 4, 5, 7, 14-17" are individually linked, not just the first number.
 8. **Extensible per-product instructions** -- each product workspace supports an optional custom system prompt that appends to the base instructions. The core rules (accuracy, citations, web search policy, artifact styling) are always enforced. Custom instructions extend behavior without overriding safety.
-9. **Production features** -- voice mode, dark theme, chat persistence, user memories, manual preview.
-10. **Zero infrastructure** -- SQLite for everything, single `make` command to run.
+9. **Add-on features** -- voice mode, dark theme, chat persistence, user memories, manual preview.
+
