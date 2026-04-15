@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     # Feature flags
     enable_cross_encoder_rerank: bool = True
     enable_thinking: bool = True
+    use_ocr_extraction: bool = True  # True = Claude Vision OCR (default), False = PyMuPDF text extraction
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
