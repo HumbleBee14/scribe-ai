@@ -5,7 +5,7 @@
 A multimodal documents reasoning platform that transforms any document into an AI-powered Q&A assistant. Upload any PDF, and the system builds a knowledge base that answers questions with exact data, visual references, and page citations.
 
 
-**Live @** [agenticmind.space](https://agenticmind.space) -- deployed on Azure VM with Cloudflare
+**Live @** [agenticmind.space](https://agenticmind.space) -- deployed on Azure VM + Cloudflare
 
 ---
 
@@ -34,7 +34,7 @@ Note: This is pre-seeded with a test manual document- The Vulcan OmniPro 220 man
 ```
                                     +------------------+
                                     |   Next.js UI     |
-                                    |  (SSE streaming)  |
+                                    |  (SSE streaming) |
                                     +--------+---------+
                                              |
                                     +--------v---------+
@@ -51,11 +51,11 @@ Note: This is pre-seeded with a test manual document- The Vulcan OmniPro 220 man
               +----------v----------+              Stage 1: Render (PyMuPDF)
               |    MCP Tool Server  |              Stage 2: OCR (Vision) or Text Extraction
               |  search_manual      |              Stage 3: Embed (MiniLM)
-              |  get_page_text      |                        |
-              |  get_page_image     |              +---------v---------+
-              |  calculate          |              |     SQLite DB     |
-              |  clarify_question   |              |  FTS5 + sqlite-vec|
-              |  update_memory      |              +-------------------+
+              |  get_page_text      |                          |
+              |  get_page_image     |                +---------v---------+
+              |  calculate          |                |     SQLite DB     |
+              |  clarify_question   |                |  FTS5 + sqlite-vec|
+              |  update_memory      |                +-------------------+
               +---------------------+
 ```
 
@@ -113,7 +113,7 @@ When a user uploads a PDF manual, it goes through a 4-stage pipeline. Each page 
                      |
                      v
 +------------------------------------------+
-| Stage 4: TOC BUILD (single LLM call)    |
+| Stage 4: TOC BUILD (single LLM call)     |
 |  Collects all pages tagged is_toc=True   |
 |  Sends ALL TOC page images at once to    |
 |  Claude Vision. Gets clean structured    |
