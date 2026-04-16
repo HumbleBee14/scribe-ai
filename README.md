@@ -2,10 +2,10 @@
 
 > Turn any document into a smart agent.
 
-A production-grade multimodal reasoning platform that transforms any document into an AI-powered Q&A assistant. Upload any PDF, and the system builds a knowledge base that answers questions with exact data, visual references, and page citations.
+A multimodal documents reasoning platform that transforms any document into an AI-powered Q&A assistant. Upload any PDF, and the system builds a knowledge base that answers questions with exact data, visual references, and page citations.
 
 
-**Live demo:** [agenticmind.space](https://agenticmind.space) -- deployed on Azure VM with Cloudflare
+**Live @** [agenticmind.space](https://agenticmind.space) -- deployed on Azure VM with Cloudflare
 
 ---
 
