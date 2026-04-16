@@ -6,8 +6,8 @@ Next.js app for the Vulcan OmniPro 220 multimodal assistant.
 
 The frontend is intentionally still a scaffold, but it now exposes the real product direction instead of the default create-next-app starter:
 
-- challenge-branded landing shell
-- quick actions for common welding workflows
+- Scribe-branded landing shell
+- quick actions for common document workflows
 - reserved surfaces for chat, evidence, source viewing, and artifacts
 
 ## Run locally

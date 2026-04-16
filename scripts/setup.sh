@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo "Setting up Prox Multimodal Agent..."
+echo "Setting up Scribe AI..."
 
 # Backend
 echo "Setting up backend (uv)..."

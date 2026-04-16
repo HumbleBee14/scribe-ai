@@ -25,7 +25,7 @@ def main() -> None:
 
     import uvicorn
 
-    parser = argparse.ArgumentParser(description="Run the Prox Agent backend")
+    parser = argparse.ArgumentParser(description="Run the Scribe AI backend")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--reload", action="store_true", default=True)

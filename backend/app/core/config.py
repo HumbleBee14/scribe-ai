@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# multimodal-prox-challenge/ is the project root
+# scribe-ai/ is the project root
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 BACKEND_DIR = PROJECT_ROOT / "backend"
 DATA_DIR = PROJECT_ROOT / "data"

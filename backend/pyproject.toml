@@ -1,7 +1,7 @@
 [project]
-name = "prox-agent-backend"
+name = "scribe-ai-backend"
 version = "0.1.0"
-description = "Multimodal reasoning agent for complex physical products"
+description = "Scribe AI - Multimodal document Q&A agent"
 requires-python = ">=3.11"
 dependencies = [
     "anthropic>=0.52.0",

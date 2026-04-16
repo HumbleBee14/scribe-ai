@@ -42,8 +42,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="Prox API",
-        description="Local-first multimodal reasoning for product manuals and workspaces",
+        title="Scribe AI API",
+        description="Multimodal document Q&A agent",
         version="0.1.0",
         lifespan=_lifespan,
     )

@@ -109,10 +109,10 @@ export function ProductDashboard({
               className="select-none whitespace-nowrap bg-gradient-to-br from-orange-400/25 via-orange-500/20 to-orange-600/15 bg-clip-text text-[clamp(3.75rem,18vw,10.5rem)] font-black uppercase leading-[0.85] tracking-[0.02em] text-transparent dark:from-orange-400/20 dark:via-orange-500/15 dark:to-orange-600/10 sm:tracking-[0.04em]"
               aria-hidden
             >
-              PROX
+              SCRIBE
             </span>
             <h1 className="mt-2 mx-auto max-w-2xl text-balance text-center text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl lg:text-[2.35rem] lg:leading-tight dark:text-white">
-              Turn any manual into a smart Agent.
+              Turn any document into a smart Agent.
             </h1>
           </div>
         </header>

@@ -1,13 +1,11 @@
-# Prox - ProductManualQnA Platform
+# Scribe AI - Multimodal Document Q&A Platform
 
-> Turn any manual into a smart agent.
+> Turn any document into a smart agent.
 
-A production-grade multimodal reasoning platform that transforms product manuals into AI-powered Q&A assistants. Upload any PDF manual, and the system builds a knowledge base that answers questions with exact data, visual references, and page citations.
+A production-grade multimodal reasoning platform that transforms any document into an AI-powered Q&A assistant. Upload any PDF, and the system builds a knowledge base that answers questions with exact data, visual references, and page citations.
 
 
-**Live demo:** [agenticmind.space](https://agenticmind.space) -- deployed on Azure VM with Cloudflare DNS/SSL
-
-**Video walkthrough:** [Watch on Loom](https://www.loom.com/share/d15c30e317504880b7de6872e8f6ed5b)
+**Live demo:** [agenticmind.space](https://agenticmind.space) -- deployed on Azure VM with Cloudflare
 
 ---
 
@@ -15,7 +13,7 @@ A production-grade multimodal reasoning platform that transforms product manuals
 
 ```bash
 git clone <repo-url>
-cd multimodal-prox-challenge
+cd scribe-ai
 cp .env.example .env          # Add your ANTHROPIC_API_KEY
 curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -27,7 +25,7 @@ make backend
 make frontend                  # Starts Next.js on localhost:3000
 ```
 
-Note: This is pre-seeded with - The Vulcan OmniPro 220 manual, pre-ingested with all 51 pages analyzed. You can upload your own manul/document to test it if needed. Open `localhost:3000` and start chatting immediately.
+Note: This is pre-seeded with a test manual document- The Vulcan OmniPro 220 manual, pre-ingested with all 51 pages analyzed. You can upload your own manul/document to test it if needed. Open `localhost:3000` and start chatting immediately.
 
 ---
 
@@ -423,11 +421,13 @@ Plus built-in Agent SDK tools:
 - **Real-time tool transparency** -- users see what the agent is doing as it works: "Searching manual...", "Read pages 7, 19, 23", "Loaded page 45", "Calculated: 175 * 0.30". Tool calls are collapsible with success/failure indicators
 - **Adaptive reasoning** -- on complex questions, the agent's extended thinking is streamed and shown in a collapsible "Reasoning" section. Users can expand it to see how the agent decided which pages to check and how it cross-referenced information
 - **Inline artifacts** -- HTML calculators, Mermaid flowcharts, SVG diagrams rendered in-chat with expand-to-fullscreen
+- **Clickable source citations** -- every page number in the agent's response is clickable and opens the actual manual page in the source viewer. Comma-separated lists like "pages 3, 4, 5, 7, 14-17" are individually linked, not just the first
 - **Manual preview** -- tabbed PDF viewer per document, scrollable, text-selectable, browser-cached
 - **Image upload** -- paste from clipboard, file picker, or mobile camera capture. Agent analyzes uploads with Vision and cross-references manual pages
 - **Voice mode** -- browser-native STT + TTS with hands-free conversational loop. Per-message replay button. Smart filtering strips emoji, markdown, artifacts for clean speech
 - **Chat persistence** -- conversations stored in SQLite with editable titles, survive page reloads
 - **User memories** -- persistent preferences in sidebar, editable by user or auto-added by agent
+- **Dark theme** -- system-aware theme with manual toggle
 
 ---
 
@@ -451,7 +451,7 @@ Plus built-in Agent SDK tools:
 ## Project Structure
 
 ```
-multimodal-prox-challenge/
+scribe-ai/
   backend/
     app/
       agent/
@@ -499,17 +499,4 @@ multimodal-prox-challenge/
     local.db                 # SQLite database (pre-seeded)
 ```
 
----
-
-## Feature Summary
-
-1. **Generic platform** -- not hardcoded to one product. Upload any manual and it works.
-2. **Vision-guided OCR** -- Claude Vision reads each page as a human would, not just text extraction, with text based only fallback for failure or large document text extraction.
-3. **Hybrid retrieval** -- FTS5 keyword + semantic vector search with cross-encoder reranking and qualification filtering.
-4. **Document map architecture** -- agent gets a full index of the manual, decides what to read.
-5. **Agent autonomy** -- we provide context and tools, the agent reasons about what to do like human.
-6. **Multi-page cross-referencing** -- the agent gathers information from multiple pages and sections before answering complex questions. For a setup walkthrough, it independently fetches polarity, settings, safety, and connections pages, then synthesizes a complete answer. It also retries searches with rephrased terms if the first attempt returns weak results.
-7. **Clickable source citations** -- every page number in the agent's response is clickable and opens the actual manual page in the source viewer. Comma-separated lists like "pages 3, 4, 5, 7, 14-17" are individually linked, not just the first number.
-8. **Extensible per-product instructions** -- each product workspace supports an optional custom system prompt that appends to the base instructions. The core rules (accuracy, citations, web search policy, artifact styling) are always enforced. Custom instructions extend behavior without overriding safety.
-9. **Add-on features** -- voice mode, dark theme, chat persistence, user memories, manual preview.
 

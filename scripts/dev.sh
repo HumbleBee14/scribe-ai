@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo "Starting Prox Multimodal Agent (dev mode)..."
+echo "Starting Scribe AI (dev mode)..."
 
 # Backend
 echo "Starting backend..."

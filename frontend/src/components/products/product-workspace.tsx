@@ -49,7 +49,7 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
 
   // Update page title with product name
   useEffect(() => {
-    document.title = activeProduct ? `Prox - ${activeProduct.name}` : "Prox";
+    document.title = activeProduct ? `Scribe - ${activeProduct.name}` : "Scribe";
   }, [activeProduct]);
 
   const { messages, isStreaming, newConversationId, sendMessage, stopStreaming, clearMessages } =
@@ -311,7 +311,7 @@ export function ProductWorkspace({ initialProductId, initialConversationId }: Pr
             className="hidden sm:block absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-xl font-black uppercase tracking-[0.38em] text-orange-600 transition-colors hover:text-orange-700 sm:text-2xl sm:tracking-[0.42em] xl:left-[calc(50%-10rem)] dark:text-orange-400 dark:hover:text-orange-300"
             title="Back to workspaces"
           >
-            Prox
+            Scribe
           </Link>
 
           <div className="relative z-10 flex min-w-0 flex-1 items-center justify-end gap-1.5 sm:gap-2">
