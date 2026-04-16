@@ -4229,3 +4229,35 @@ Error output: Check stderr output for details
 2026-04-15 15:33:51,399 [WARNING] app.agent.orchestrator: [agent-runtime] request completed via Claude Agent SDK (session=pz4g0xr1ql, product=vulcan-omnipro-220)
 2026-04-15 15:34:05,461 [WARNING] app.agent.orchestrator: [agent-runtime] request started via Claude Agent SDK (session=pz4g0xr1ql, product=vulcan-omnipro-220)
 2026-04-15 15:34:19,008 [WARNING] app.agent.orchestrator: [agent-runtime] request completed via Claude Agent SDK (session=pz4g0xr1ql, product=vulcan-omnipro-220)
+2026-04-16 19:16:28,239 [WARNING] app.agent.orchestrator: [agent-runtime] request started via Claude Agent SDK (session=dxa6jdjpu5, product=vulcan-omnipro-220)
+2026-04-16 19:16:28,257 [INFO] app.agent.prompts: [PROMPT] Cached static prompt for vulcan-omnipro-220 (18551 chars)
+2026-04-16 19:17:00,977 [INFO] app.ingest.build_embeddings: Loaded embedding model: all-MiniLM-L6-v2
+2026-04-16 19:17:03,282 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-04-16 19:17:03,407 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/cross-encoder/ms-marco-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-04-16 19:17:03,433 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/cross-encoder/ms-marco-MiniLM-L6-v2/c5ee24cb16019beea0893ab7796b1df96625c6b8/config.json "HTTP/1.1 200 OK"
+2026-04-16 19:17:04,083 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-04-16 19:17:04,204 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/cross-encoder/ms-marco-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-04-16 19:17:04,204 [WARNING] huggingface_hub.utils._http: Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-04-16 19:17:04,211 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/cross-encoder/ms-marco-MiniLM-L6-v2/c5ee24cb16019beea0893ab7796b1df96625c6b8/config.json "HTTP/1.1 200 OK"
+2026-04-16 19:17:04,332 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-04-16 19:17:04,465 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/cross-encoder/ms-marco-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-04-16 19:17:04,471 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/cross-encoder/ms-marco-MiniLM-L6-v2/c5ee24cb16019beea0893ab7796b1df96625c6b8/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-04-16 19:17:04,598 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/cross-encoder/ms-marco-MiniLM-L-6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 307 Temporary Redirect"
+2026-04-16 19:17:04,718 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/cross-encoder/ms-marco-MiniLM-L6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-04-16 19:17:04,838 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/cross-encoder/ms-marco-MiniLM-L-6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 307 Temporary Redirect"
+2026-04-16 19:17:04,960 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/cross-encoder/ms-marco-MiniLM-L6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-04-16 19:17:05,118 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-04-16 19:17:05,234 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/cross-encoder/ms-marco-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-04-16 19:17:05,239 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/cross-encoder/ms-marco-MiniLM-L6-v2/c5ee24cb16019beea0893ab7796b1df96625c6b8/README.md "HTTP/1.1 200 OK"
+2026-04-16 19:17:05,363 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/cross-encoder/ms-marco-MiniLM-L-6-v2 "HTTP/1.1 307 Temporary Redirect"
+2026-04-16 19:17:05,490 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/cross-encoder/ms-marco-MiniLM-L6-v2 "HTTP/1.1 200 OK"
+2026-04-16 19:17:05,530 [INFO] app.agent.tools.tools: [RERANK] Cross-encoder model loaded
+2026-04-16 19:17:08,840 [INFO] app.agent.tools.tools: [RERANK]   owner-manual p48: hybrid=0.162 cross_raw=-9.054 cross_norm=0.000
+2026-04-16 19:17:08,841 [INFO] app.agent.tools.tools: [RERANK]   owner-manual p34: hybrid=0.161 cross_raw=-8.875 cross_norm=0.000
+2026-04-16 19:17:08,841 [INFO] app.agent.tools.tools: [RERANK]   owner-manual p10: hybrid=0.161 cross_raw=-9.275 cross_norm=0.000
+2026-04-16 19:17:08,841 [INFO] app.agent.tools.tools: [RERANK]   owner-manual p11: hybrid=0.159 cross_raw=-9.653 cross_norm=0.000
+2026-04-16 19:17:08,841 [INFO] app.agent.tools.tools: [RERANK]   owner-manual p1: hybrid=0.159 cross_raw=-9.516 cross_norm=0.000
+2026-04-16 19:17:08,842 [INFO] app.agent.tools.tools: [RERANK]   owner-manual p20: hybrid=0.158 cross_raw=-9.418 cross_norm=0.000
+2026-04-16 19:17:08,842 [INFO] app.agent.tools.tools: [RERANK] Reranked 6 candidates, top cross=0.000, top hybrid=0.161
+2026-04-16 19:17:08,994 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /home/dineshyd/Challenges/scribe-ai/backend/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+2026-04-16 19:17:17,910 [WARNING] app.agent.orchestrator: [agent-runtime] request completed via Claude Agent SDK (session=dxa6jdjpu5, product=vulcan-omnipro-220)
